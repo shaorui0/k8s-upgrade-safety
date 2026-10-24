@@ -30,6 +30,7 @@ One change = one OpenSpec change = staged commits, evidence, an HTML report and 
 
 | Change | Date | What | Takeaway | Report · Notes |
 |---|---|---|---|---|
+| c0001 requirements-and-method | 2026-10-24 | Requirements R1-R15, the state-machine method (gates, apiserver gate, quadrant, rollback, fleet order), leak scan | The real problem was never manual vs automated; it was that nobody could answer "what evidence says it is safe to proceed". | [report](reports/0001-requirements-and-method.html) · [notes](notes/blog/0001-requirements-and-method.md) |
 
 ## License
 
