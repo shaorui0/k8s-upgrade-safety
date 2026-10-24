@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>0002-synthetic-fleet</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">0002-synthetic-fleet</h1>
+</header>
+<h1 id="c0002-synthetic-fleet">c0002 synthetic fleet</h1>
+<p><strong>What changed.</strong> Nine synthetic clusters over the five
+stages and three cluster types, five planted faults with a ground-truth
+list (raft lag 2000, CCM rollout unhealthy, PDB blocking drain, slow
+eviction without the 600 s flag, apiserver <code>/readyz</code>
+failing), one flagged exception that must pass, a loader/validator
+(<code>FleetError</code> lists every problem), skew and quorum
+arithmetic, fleet ordering.</p>
+<p><strong>Why.</strong> Every gate in the method needs something to
+catch. The faults exist before the gates so the tests cannot be written
+to pass.</p>
+<p><strong>Verdict.</strong> 23 model tests green, regenerating the
+fleet is byte-identical, scan OK, 0 private-pattern hits,
+<code>openspec validate</code> passes.</p>
+<h1 id="acceptance-evidence-verbatim">Acceptance evidence
+(verbatim)</h1>
+<h2 id="all-tests">3.1 all tests</h2>
+<pre><code>$ python3 -m unittest discover -v 2&gt;&amp;1 | tail -40
+test_minor_rejects_garbage (upgrade_safety.test_model.ArithmeticTest.test_minor_rejects_garbage) ... ok
+test_nothing_newer_than_apiserver (upgrade_safety.test_model.ArithmeticTest.test_nothing_newer_than_apiserver) ... ok
+test_quorum (upgrade_safety.test_model.ArithmeticTest.test_quorum) ... ok
+test_skew_cm_and_scheduler (upgrade_safety.test_model.ArithmeticTest.test_skew_cm_and_scheduler) ... ok
+test_skew_kubelet (upgrade_safety.test_model.ArithmeticTest.test_skew_kubelet) ... ok
+test_apiserver_not_ready_fault (upgrade_safety.test_model.GroundTruthTest.test_apiserver_not_ready_fault) ... ok
+test_at_least_four_distinct_fault_kinds (upgrade_safety.test_model.GroundTruthTest.test_at_least_four_distinct_fault_kinds) ... ok
+test_ccm_rollout_unhealthy (upgrade_safety.test_model.GroundTruthTest.test_ccm_rollout_unhealthy) ... ok
+test_clean_clusters_have_no_fault_fields (upgrade_safety.test_model.GroundTruthTest.test_clean_clusters_have_no_fault_fields) ... ok
+test_flagged_exception_is_a_positive_case (upgrade_safety.test_model.GroundTruthTest.test_flagged_exception_is_a_positive_case) ... ok
+test_pdb_allows_zero_disruptions (upgrade_safety.test_model.GroundTruthTest.test_pdb_allows_zero_disruptions) ... ok
+test_raft_lag_2000 (upgrade_safety.test_model.GroundTruthTest.test_raft_lag_2000) ... ok
+test_slow_eviction_without_flag (upgrade_safety.test_model.GroundTruthTest.test_slow_eviction_without_flag) ... ok
+test_cluster_is_a_copy (upgrade_safety.test_model.LoadTest.test_cluster_is_a_copy) ... ok
+test_order_canary_before_other_prod_and_management_last (upgrade_safety.test_model.LoadTest.test_order_canary_before_other_prod_and_management_last) ... ok
+test_shape (upgrade_safety.test_model.LoadTest.test_shape) ... ok
+test_target_ami (upgrade_safety.test_model.LoadTest.test_target_ami) ... ok
+test_unknown_cluster (upgrade_safety.test_model.LoadTest.test_unknown_cluster) ... ok
+test_even_master_count (upgrade_safety.test_model.ValidationTest.test_even_master_count) ... ok
+test_missing_stage (upgrade_safety.test_model.ValidationTest.test_missing_stage) ... ok
+test_pdb_unknown_node (upgrade_safety.test_model.ValidationTest.test_pdb_unknown_node) ... ok
+test_reports_every_problem_at_once (upgrade_safety.test_model.ValidationTest.test_reports_every_problem_at_once) ... ok
+test_valid_fleet_has_no_problems (upgrade_safety.test_model.ValidationTest.test_valid_fleet_has_no_problems) ... ok
+
+----------------------------------------------------------------------
+Ran 23 tests in 0.517s
+
+OK
+exit=0</code></pre>
+<h2 id="loader-table-and-fault-ground-truth">3.2 loader table and fault
+ground truth</h2>
+<pre><code>$ python3 - &lt;&lt;&#39;PY&#39;
+from upgrade_safety import model
+f = model.load_fleet(&#39;testenv/fleet.yaml&#39;)
+print(&#39;%-12s %-12s %-12s %-8s %-6s %s&#39; % (&#39;cluster&#39;,&#39;stage&#39;,&#39;type&#39;,&#39;workers&#39;,&#39;flag&#39;,&#39;max_raft_lag&#39;))
+for c in f.ordered():
+    print(&#39;%-12s %-12s %-12s %-8d %-6d %d&#39; % (c[&#39;name&#39;], c[&#39;stage&#39;], c[&#39;cluster_type&#39;], len(c[&#39;workers&#39;][&#39;nodes&#39;]), c[&#39;flags&#39;][&#39;drain_timeout_s&#39;], max(model.raft_lag(c[&#39;etcd&#39;]).values())))
+print()
+for x in f.faults:
+    print(x[&#39;id&#39;], x[&#39;cluster&#39;], x[&#39;kind&#39;], &#39;-&gt;&#39;, x[&#39;expect_stop&#39;])
+PY
+cluster      stage        type         workers  flag   max_raft_lag
+dev-1        dev          dev-staging  3        300    80
+preprod-1    preprod      dev-staging  4        600    80
+prod-canary  prod-canary  workload     5        600    80
+prod-east    prod         workload     5        300    2000
+prod-eu      prod         workload     5        300    80
+prod-north   prod         workload     5        300    80
+prod-south   prod         workload     5        300    80
+prod-west    prod         workload     5        300    80
+mgmt-1       management   management   4        300    80
+
+F1 prod-east raft_lag -&gt; check
+F2 prod-south ccm_unhealthy -&gt; addon:ccm
+F3 prod-west pdb_blocks_drain -&gt; workers:batch1
+F4 prod-eu slow_eviction -&gt; workers:batch
+F5 prod-north apiserver_not_ready -&gt; master:prod-north-m2:apiserver_ready
+exit=0</code></pre>
+<h2 id="regenerating-the-fleet-is-byte-identical">regenerating the fleet
+is byte-identical</h2>
+<pre><code>$ python3 testenv/gen_fleet.py | diff - testenv/fleet.yaml &amp;&amp; echo identical
+identical
+exit=0</code></pre>
+<h2 id="scan-and-openspec">3.3 scan and openspec</h2>
+<pre><code>$ python3 tools/check_rules.py; grep -rniE -f .leak_patterns.local --exclude-dir=.git --exclude=.leak_patterns.local . | wc -l; openspec validate c0002-synthetic-fleet
+check_rules: OK
+       0
+Change &#39;c0002-synthetic-fleet&#39; is valid
+exit=0</code></pre>
+</body>
+</html>
