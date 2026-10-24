@@ -26,4 +26,4 @@ Worker replacement SHALL start with a canary step of exactly one node, followed 
 
 #### Scenario: Order
 - **WHEN** a cluster with 10 stateless workers is planned
-- **THEN** the steps are canary (1 node) then five batches of 2
+- **THEN** the steps are a canary of 1 node, then batches of at most 2 (20%)

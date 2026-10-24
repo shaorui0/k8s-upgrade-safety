@@ -25,6 +25,11 @@ Source of truth for every number: the two public write-ups (project page and blo
 | R13 | Every run produces `runs/<id>/report.html` | acceptance command |
 | R14 | Process is the deliverable: each change is an OpenSpec change, staged commits, evidence file, local HTML report, raw blog notes | `openspec/changes/`, `reports/`, `notes/blog/` |
 | R15 | Public-safe: a leak scan is part of every acceptance | `python3 tools/check_rules.py` |
+| R16 | The upgrade is a level-triggered reconcile: `plan` produces a formal diff artifact (desired vs observed) and `apply` is a per-step loop (precheck, one executor call, postcheck against the baseline, gate) with one evidence record per attempt | `diff.json`, `evidence.jsonl`, reconcile tests |
+| R17 | Four JSON contracts (snapshot, diff, step, evidence) with a validator; every artifact a run writes conforms | contract tests over run directories |
+| R18 | Every step declares `reversible`; an irreversible step is refused without its `backup_precondition` (the etcd snapshot is one instance) | test: no snapshot, no execute |
+| R19 | Control plane and execution plane are separate: the engine acts only through an `Executor` interface; only a simulated executor is implemented, real adapters are named and refuse | executor seam tests |
+| R20 | Worker blast radius is tiered (canary of one node, then batches of at most 20%, stateful alone), orthogonal to layer order master, worker, components | tier tests |
 
 ## 3. Constraints
 

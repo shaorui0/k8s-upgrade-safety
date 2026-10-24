@@ -10,7 +10,8 @@ The original was a Python CLI orchestrating Ansible, boto3 and kubectl against r
 pip install -r requirements.txt            # PyYAML only
 python3 -m unittest discover               # model, checks, plan, pipeline, fault matrix
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-canary --target 1.26 --approve
-open runs/*/report.html                    # decision, steps, criteria before/after, plan, diff, log
+open runs/*/report.html                    # decision, steps, criteria, plan, diff, evidence records, log
+ls runs/*/                                 # snapshots/, diff.json, steps.json, evidence.jsonl, state.json, ...
 ```
 
 No cloud account, no kubectl, no network: the cluster is data. Try the gates:
@@ -22,7 +23,7 @@ python3 -m upgrade_safety apply --fleet testenv/fleet.yaml --cluster prod-canary
 # planted faults, each stopping at the step the method says it should
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-east  --approve   # raft lag 2000: stops at check
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-north --approve   # apiserver /readyz: stops before controller-manager
-python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-west  --approve   # PDB blocks drain: nothing forced
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-west  --approve   # PDB blocks the canary drain: nothing forced
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-south --approve   # CCM unhealthy: addon layer stops
 
 # interrupt, then continue without repeating completed steps
@@ -49,6 +50,9 @@ Each answer traces to a numbered requirement in [`docs/REQUIREMENTS.md`](docs/RE
 | **What is a gate?** | A written criterion with a fixed threshold that is evaluated by code and leaves a JSON record. Raft lag over 1000 fails the gate; nobody decides on the day. (R2) |
 | **Why a dry-run that can fail?** | A plan document cannot fail. A plan that diffs AMIs, Launch Templates and quorum arithmetic can, and failing early is cheap. Blast radius is a design input: 3 masters tolerate 1, `serial: 1` caps the worst case at 1. (R3) |
 | **Why is the apiserver the gate?** | It anchors version skew. Nothing else on a master moves until it passes `/readyz` and is a healthy load-balancer member. (R5) |
+| **What is the engine, really?** | A level-triggered reconcile: desired versus observed gives a diff, the diff becomes steps, each step is precheck, one action, postcheck against the baseline, gate, with one evidence record. Drift is a difference, not a surprise. (R16) |
+| **Who is allowed to touch the cluster?** | Only an executor behind a narrow interface (`observe`, `execute`). The engine decides from snapshots and never acts; the simulator is the one implementation, real Terraform or Ansible adapters are named and refuse. (R19) |
+| **Can everything be undone?** | No, and each step says so. An irreversible step (control-plane components) is refused unless a fresh etcd snapshot exists; "snapshot first" is one instance of that rule. (R18) |
 | **What does "done" mean?** | A version x health quadrant against a baseline file written before the upgrade, cross-checked with an external monitor. Not an engineer's memory. (R8) |
 | **When do you roll back?** | Triggers are declared before execution, per layer: control plane is snapshot restore plus binary downgrade, workers stop the refresh and revert the template, addons roll out undo. (R9) |
 | **What stops the whole fleet?** | Any failure. Order is dev, preprod, prod canary, remaining prod, management last. A human restarts it. (R10) |
@@ -62,7 +66,9 @@ Each answer traces to a numbered requirement in [`docs/REQUIREMENTS.md`](docs/RE
 ```
 docs/METHOD.md            the model: state machine, step table, apiserver gate, quadrant, rollback, fleet order
 docs/REQUIREMENTS.md      R1.. requirement table and the data-boundary constraints
-upgrade_safety/           checks, plan, engine (steps, gates, resume), verify, evidence, report, cli
+upgrade_safety/contracts/ snapshot, diff, step, evidence JSON Schemas + stdlib validator
+upgrade_safety/           control plane: engine, reconcile loop, steps, probes, gate, plan (diff), verify, report, cli
+upgrade_safety/executors.py  execution plane interface; SimulatedExecutor is the only implementation
 testenv/                  fleet.yaml (9 clusters, 5 planted faults) and its generator
 tools/check_rules.py      leak scan; private patterns live in a gitignored .leak_patterns.local
 tools/mutation_check.py   break each gate once; the tests must go red (make mutation)
