@@ -4,10 +4,10 @@
 - [x] 1.3 tests: F2 stop and untouched workers, mid-layer CCM failure, addon-layer rollout failure still covered, mutation for the precheck
 
 ## 2. Docs consistency
-- [ ] 2.1 METHOD, testenv README, README, c0002/c0003 descriptions; evidence files annotated, not rewritten
+- [x] 2.1 METHOD, testenv README, README, c0002/c0003 descriptions; evidence files annotated, not rewritten
 
 ## 3. Acceptance
-- [ ] 3.1 `python3 -m unittest discover -v` green; mutation check all killed
-- [ ] 3.2 prod-south run: stop at `workers:launch_template`, nothing replaced; `grep` shows no remaining claim that F2 stops at the addon layer
-- [ ] 3.3 `check_rules` OK; `openspec validate`
-- [ ] 3.4 report, notes, Progress row
+- [x] 3.1 `python3 -m unittest discover -v` green; mutation check all killed
+- [x] 3.2 prod-south run: stop at `workers:launch_template`, nothing replaced; `grep` shows no remaining claim that F2 stops at the addon layer
+- [x] 3.3 `check_rules` OK; `openspec validate`
+- [x] 3.4 report, notes, Progress row

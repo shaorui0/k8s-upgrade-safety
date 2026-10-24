@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>0006-ccm-worker-precondition</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">0006-ccm-worker-precondition</h1>
+</header>
+<h1 id="c0006-ccm-health-gates-the-worker-layer">c0006 CCM health gates
+the worker layer</h1>
+<p><strong>What changed.</strong> Every worker-layer step (launch
+template, canary, each batch) carries a blocking precheck that the
+cloud-controller-manager is healthy: an unhealthy CCM strands new
+workers on the <code>uninitialized</code> taint. Fault F2
+(<code>prod-south</code>) is re-planted as an old CCM that is healthy at
+<code>check</code> but broken once the new control plane is up; it now
+stops at <code>workers:launch_template</code> with the control plane
+done and no worker replaced. The addon layer still verifies the CCM
+rollout. The descriptions of F2 in METHOD, README, the testenv README,
+the fleet ground truth, and the c0002 and c0003 specs and notes are
+updated; the earlier evidence files and reports carry a note instead of
+being rewritten.</p>
+<p><strong>Why.</strong> The failure belongs where it is cheapest to
+find: before anything is replaced, not after.</p>
+<p><strong>Verdict.</strong> 149 tests green; F2 stops at
+<code>workers:launch_template</code> with the evidence record showing
+the executor was never called, all masters at 1.26, ASG, launch template
+and every worker still on the old AMI; <code>check</code> passes on the
+same cluster; 25/25 gate mutations killed; no document claims the old
+stop point; scan OK, 0 private-pattern hits,
+<code>openspec validate</code> passes.</p>
+<h1 id="acceptance-evidence-verbatim">Acceptance evidence
+(verbatim)</h1>
+<h2 id="all-tests-tail-ccm-tests-verbose-mutation-check">3.1 all tests
+(tail), CCM tests (verbose), mutation check</h2>
+<pre><code>$ python3 -m unittest discover 2&gt;&amp;1 | tail -4; python3 -m unittest -v upgrade_safety.test_pipeline.AddonLayerTest upgrade_safety.test_pipeline.WorkerLayerTest 2&gt;&amp;1 | grep -E &#39;ccm|Ran|OK|FAIL&#39;; python3 tools/mutation_check.py
+----------------------------------------------------------------------
+Ran 149 tests in 8.239s
+
+OK
+test_addon_layer_still_verifies_the_ccm_rollout (upgrade_safety.test_pipeline.AddonLayerTest.test_addon_layer_still_verifies_the_ccm_rollout) ... ok
+test_ccm_broken_by_the_new_control_plane_stops_the_worker_layer_before_any_worker (upgrade_safety.test_pipeline.AddonLayerTest.test_ccm_broken_by_the_new_control_plane_stops_the_worker_layer_before_any_worker) ... ok
+test_ccm_unhealthy_mid_layer_stops_the_next_batch (upgrade_safety.test_pipeline.AddonLayerTest.test_ccm_unhealthy_mid_layer_stops_the_next_batch) ... ok
+test_every_worker_step_carries_the_ccm_precheck (upgrade_safety.test_pipeline.WorkerLayerTest.test_every_worker_step_carries_the_ccm_precheck) ... ok
+test_new_node_stuck_when_ccm_unhealthy_now (upgrade_safety.test_pipeline.WorkerLayerTest.test_new_node_stuck_when_ccm_unhealthy_now) ... ok
+Ran 12 tests in 1.121s
+OK
+killed   raft lag limit 1000 -&gt; 3000
+killed   apiserver /readyz probe always true
+killed   apiserver LB-membership probe always true
+killed   next-component guard always passes
+killed   step sign-off ignored
+killed   plan sign-off ignored
+killed   completed steps re-executed on resume
+killed   PDB zero-disruption not a blocker
+killed   drain timeout ignored
+killed   addon order not enforced
+killed   CCM rollout health ignored
+killed   irreversible step runs without backup
+killed   already_done skip disabled
+killed   canary widened to the whole first batch
+killed   quadrant: unhealthy still proceeds
+killed   baseline regressions ignored
+killed   serial may exceed quorum
+killed   auto allowed on prod-class clusters
+killed   failed postcheck continues
+killed   auto accepts plan warnings
+killed   assisted demands a signature
+killed   CCM precheck on workers always passes
+killed   new apiserver no longer breaks the old CCM
+killed   contract enum not enforced
+killed   contract required not enforced
+
+25/25 mutations killed
+exit=0</code></pre>
+<h2
+id="f2-on-prod-south-stop-at-the-worker-layers-precheck-control-plane-done-nothing-replaced">3.2
+F2 on prod-south: stop at the worker layer’s precheck, control plane
+done, nothing replaced</h2>
+<pre><code>$ python3 -m upgrade_safety run $F --cluster prod-south --approve --run-id acc-south | grep -E &#39;^\[|STOPPED&#39; | cut -c1-250; python3 - &lt;&lt;&#39;PY&#39;
+import json
+w = json.load(open(&#39;runs/acc-south/cluster.json&#39;))
+print(&#39;masters components:&#39;, sorted({m[k] for m in w[&#39;masters&#39;] for k in (&#39;apiserver&#39;,&#39;controller_manager&#39;,&#39;scheduler&#39;,&#39;kubelet&#39;)}))
+print(&#39;asg ami:&#39;, w[&#39;workers&#39;][&#39;asg&#39;][&#39;ami&#39;], &#39;| launch template ami:&#39;, w[&#39;workers&#39;][&#39;asg&#39;][&#39;launch_template&#39;][&#39;ami&#39;], &#39;| worker amis:&#39;, sorted({n[&#39;ami&#39;] for n in w[&#39;workers&#39;][&#39;nodes&#39;]}))
+print(&#39;addon versions:&#39;, {k: v[&#39;version&#39;] for k, v in w[&#39;addons&#39;].items()}, &#39;| ccm healthy:&#39;, w[&#39;addons&#39;][&#39;ccm&#39;][&#39;healthy&#39;])
+last = [json.loads(l) for l in open(&#39;runs/acc-south/evidence.jsonl&#39;)][-1]
+print(&#39;last evidence:&#39;, last[&#39;step_id&#39;], last[&#39;outcome&#39;], &#39;failed:&#39;, [a[&#39;id&#39;] for a in last[&#39;assertions&#39;] if not a[&#39;passed&#39;]], &#39;| executed:&#39;, &#39;execute&#39; in last)
+r = json.load(open(&#39;runs/acc-south/rollback.json&#39;))
+print(&#39;rollback triggers fired:&#39;, r[&#39;fired_triggers&#39;], &#39;| layer:&#39;, r[&#39;layer&#39;])
+PY
+[prod-south] run: FAILED  run=acc-south  gate=manual  steps 22/33 completed
+STOPPED at workers:launch_template: precheck &#39;ccm-healthy&#39; failed: an unhealthy cloud-controller-manager would strand new workers on the uninitialized taint (ccm is UNHEALTHY)
+masters components: [&#39;1.26&#39;]
+asg ami: ami-synth-125 | launch template ami: ami-synth-125 | worker amis: [&#39;ami-synth-125&#39;]
+addon versions: {&#39;ccm&#39;: &#39;1.25&#39;, &#39;cluster_autoscaler&#39;: &#39;1.25&#39;, &#39;cni&#39;: &#39;1.25&#39;} | ccm healthy: False
+last evidence: workers:launch_template stopped_precheck failed: [&#39;ccm-healthy&#39;] | executed: False
+rollback triggers fired: [] | layer: worker
+exit=0</code></pre>
+<h2
+id="the-check-does-not-see-it-it-runs-before-the-new-control-plane-exists">the
+check does not see it (it runs before the new control plane exists)</h2>
+<pre><code>$ python3 -m upgrade_safety check $F --cluster prod-south --run-id acc-south-check | head -1
+[prod-south] check: COMPLETE  run=acc-south-check  gate=manual  steps 2/33 completed
+exit=0</code></pre>
+<h2
+id="fault-matrix-every-planted-fault-stops-where-the-ground-truth-says">fault
+matrix: every planted fault stops where the ground truth says</h2>
+<pre><code>$ for c in prod-east prod-south prod-west prod-eu prod-north; do python3 -m upgrade_safety run $F --cluster $c --approve --run-id acc-m-$c &gt; /dev/null; python3 -c &quot;import json,yaml; s=json.load(open(&#39;runs/acc-m-$c/state.json&#39;)); f=[x for x in yaml.safe_load(open(&#39;testenv/fleet.yaml&#39;))[&#39;faults&#39;] if x[&#39;cluster&#39;]==&#39;$c&#39;][0]; print(&#39;%-11s %s stopped_at=%-42s expected=%s&#39; % (&#39;$c&#39;, f[&#39;id&#39;], s[&#39;stopped_at&#39;], f[&#39;expect_stop&#39;]))&quot;; done
+prod-east   F1 stopped_at=check                                      expected=check
+prod-south  F2 stopped_at=workers:launch_template                    expected=workers:launch_template
+prod-west   F3 stopped_at=workers:canary                             expected=workers:canary
+prod-eu     F4 stopped_at=workers:batch2                             expected=workers:batch
+prod-north  F5 stopped_at=master:prod-north-m2:apiserver_ready       expected=master:prod-north-m2:apiserver_ready
+exit=0</code></pre>
+<h2
+id="addon-layer-verification-still-exists-unit-test-with-a-purpose-built-fleet">addon-layer
+verification still exists (unit test with a purpose-built fleet)</h2>
+<pre><code>$ python3 -m unittest -v upgrade_safety.test_pipeline.AddonLayerTest.test_addon_layer_still_verifies_the_ccm_rollout 2&gt;&amp;1 | tail -5
+
+----------------------------------------------------------------------
+Ran 1 test in 0.141s
+
+OK
+exit=0</code></pre>
+<h2 id="no-document-still-claims-f2-stops-in-the-addon-layer">no
+document still claims F2 stops in the addon layer</h2>
+<pre><code>$ grep -n &#39;addon layer stops&#39; README.md docs/*.md testenv/README.md | wc -l; grep -n &#39;F2&#39; testenv/README.md docs/*.md | cut -c1-160; grep -n -A2 -B1 &#39;F2&#39; testenv/fleet.yaml | cut -c1-200 | head -12
+       0
+testenv/README.md:12:| `prod-south` | prod | workload | **F2** the old CCM is healthy at `check` but unhealthy once the new control plane is up: the worker laye
+docs/REQUIREMENTS.md:35:| R23 | Cloud-controller-manager health is a precheck of every worker-layer step (an unhealthy CCM strands new workers on the uninitiali
+1191-  criterion: etcd_raft_lag
+1192:- id: F2
+1193-  cluster: prod-south
+1194-  kind: ccm_unhealthy
+exit=0</code></pre>
+<h2 id="scan-independent-grep-openspec">3.3 scan, independent grep,
+openspec</h2>
+<pre><code>$ python3 tools/check_rules.py; grep -rniE -f .leak_patterns.local --exclude-dir=.git --exclude=.leak_patterns.local --exclude-dir=runs --exclude-dir=__pycache__ . | wc -l; openspec validate c0006-ccm-worker-precondition
+check_rules: OK
+       0
+Change &#39;c0006-ccm-worker-precondition&#39; is valid
+exit=0</code></pre>
+</body>
+</html>

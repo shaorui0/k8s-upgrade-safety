@@ -2,7 +2,7 @@
 
 A clean-room, runnable model of the upgrade safety system I built and ran across 50 self-managed clusters, 1.24 -> 1.29, with zero customer-impacting downtime.
 
-The original was a Python CLI orchestrating Ansible, boto3 and kubectl against real fleets. This repository is not that code. It is the *model* behind it, written as a state machine with gates ([`docs/METHOD.md`](docs/METHOD.md)) and executed by a simulator against a synthetic fleet with planted faults, so every gate can be run, broken and inspected. Source material is the two public write-ups only; see the data boundary in [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
+The original was a Python CLI orchestrating Ansible, boto3 and kubectl against real fleets. This repository is not that code. It is the *model* behind it, written as a state machine with gates ([`docs/METHOD.md`](docs/METHOD.md)) and executed by a simulator against a synthetic fleet with planted faults, so every gate can be run, broken and inspected. Source material is the two public write-ups plus my own design framework (concepts only, re-implemented from scratch: no employer code, schemas or names); see the data boundary in [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
 
 ## Quickstart
 
@@ -95,6 +95,7 @@ One change = one OpenSpec change = staged commits, evidence, an HTML report and 
 | c0003 pipeline-skeleton | 2026-10-24 | check/plan/apply/verify/run CLI: approval gate, per-master sign-off, apiserver gate, never-forced drains, addon order, quadrant vs baseline, rollback advice, resume, fleet order, HTML report | Evidence is the product: every step writes a snapshot, a log line and a state transition, and the report is only a view over those files. | [report](reports/0003-pipeline-skeleton.html) · [notes](notes/blog/0003-pipeline-skeleton.md) |
 | c0004 contracts-and-reconcile | 2026-10-24 | Four JSON contracts, plan as a diff artifact, per-step reconcile loop with evidence.jsonl, executor seam, reversibility guard, canary tier | The decisions moved out of the engine into data: a step is a record, probes read snapshots, the executor only acts. | [report](reports/0004-contracts-and-reconcile.html) · [notes](notes/blog/0004-contracts-and-reconcile.md) |
 | c0005 gate-policy | 2026-10-24 | `--gate manual\|assisted\|auto`; auto refused on prod-class clusters before any run exists; assisted continues on a passing postcheck | Autonomy is a dial on who decides to continue, bounded by cluster class in code; auto needs a cleaner plan, not a more permissive one. | [report](reports/0005-gate-policy.html) · [notes](notes/blog/0005-gate-policy.md) |
+| c0006 ccm-worker-precondition | 2026-10-24 | CCM health is a precheck of every worker step; F2 re-planted (old CCM broken by the new control plane) and stops at the worker layer | A failure belongs where it is cheapest to find: before anything is replaced, as a dependency edge between layers rather than a reordering. | [report](reports/0006-ccm-worker-precondition.html) · [notes](notes/blog/0006-ccm-worker-precondition.md) |
 
 ## License
 

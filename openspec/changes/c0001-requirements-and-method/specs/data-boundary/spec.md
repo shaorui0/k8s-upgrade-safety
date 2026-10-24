@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Clean-room sources
-The repository SHALL be derived only from the two public write-ups of the system; no employer repository, cluster alias, internal service name, customer name, chat domain or account number may appear in any file.
+The repository SHALL be derived only from the two public write-ups of the system (extended in c0004: plus the author's own design concepts, re-implemented from scratch, no file or text copied); no employer repository, cluster alias, internal service name, customer name, chat domain or account number may appear in any file.
 
 #### Scenario: Leak scan
 - **WHEN** `python3 tools/check_rules.py` runs

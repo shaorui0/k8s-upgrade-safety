@@ -36,7 +36,7 @@ Source of truth for every number: the two public write-ups (project page and blo
 
 ## 3. Constraints
 
-- **Data boundary.** Clean-room rewrite. Only the two public write-ups are source material. No employer name, company cluster alias, internal service name, customer name, chat-workspace domain or account number in any file, commit message or report. Private patterns live in `.leak_patterns.local` (gitignored).
+- **Data boundary.** Clean-room rewrite. Source material is the two public write-ups plus the author's own design framework as concepts; every schema, line of code and example in this repository is written from scratch here. No employer name, company cluster alias, internal service name, customer name, chat-workspace domain or account number in any file, commit message or report. Private patterns live in `.leak_patterns.local` (gitignored).
 - **No network, no cloud, no kubectl.** The simulator models the cluster as data; the CLI never calls out. Python 3 standard library plus PyYAML.
 - **Honest scope.** The simulator proves the gate logic is consistent and its evidence is reproducible. It does not prove anything about real kubeadm behaviour. The README says so.
 - **Numbers.** 50 clusters, 1.24 to 1.29, 18-21 h two-person to 6-8 h single operator, 20% batches, `serial: 1`, raft lag 1000, drain 300 s to 600 s. The roadmap items in the blog (alert gating, synthetic checks, auto-promotion after canary) are targets, not results, and are not claimed.
