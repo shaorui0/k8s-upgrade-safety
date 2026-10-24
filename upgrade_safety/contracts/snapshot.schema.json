@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "upgrade_safety/contracts/snapshot.schema.json",
+  "title": "Snapshot",
+  "description": "Observed state of one cluster at one moment. Produced only by the execution plane's read-only observe(); the control plane decides from snapshots alone. The same shape serves as the run baseline, a step's precheck/postcheck pair, and a scheduled daily health record.",
+  "type": "object",
+  "required": ["meta", "flags", "masters", "etcd", "workers", "pdbs", "addons", "kube_system", "workload", "alerts", "monitor", "backups"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["cluster", "stage", "cluster_type", "captured_at", "role", "collector_version", "target_version", "target_ami"],
+      "additionalProperties": false,
+      "properties": {
+        "cluster": {"type": "string"},
+        "stage": {"type": "string", "enum": ["dev", "preprod", "prod-canary", "prod", "management"]},
+        "cluster_type": {"type": "string", "enum": ["workload", "management", "dev-staging"]},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "role": {"type": "string", "enum": ["baseline", "precheck", "postcheck", "daily"], "description": "Why it was taken. baseline and postcheck form a delta pair."},
+        "collector_version": {"type": "string"},
+        "target_version": {"type": "string", "description": "The desired minor this snapshot is judged against."},
+        "target_ami": {"type": ["string", "null"]}
+      }
+    },
+    "flags": {"type": "object", "description": "Per-cluster exceptions, e.g. drain_timeout_s."},
+    "masters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "apiserver", "controller_manager", "scheduler", "kubelet", "ready", "readyz", "lb_member"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"},
+          "apiserver": {"type": "string"},
+          "controller_manager": {"type": "string"},
+          "scheduler": {"type": "string"},
+          "kubelet": {"type": "string"},
+          "ready": {"type": "boolean"},
+          "readyz": {"type": "boolean"},
+          "lb_member": {"type": "string", "enum": ["healthy", "unhealthy"]}
+        }
+      }
+    },
+    "etcd": {
+      "type": "object",
+      "required": ["count", "online", "max_lag", "leaders", "members"],
+      "additionalProperties": false,
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "online": {"type": "integer", "minimum": 0},
+        "max_lag": {"type": "integer", "minimum": 0},
+        "leaders": {"type": "array", "items": {"type": "string"}},
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "online", "raft_index", "lag"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string"},
+              "online": {"type": "boolean"},
+              "raft_index": {"type": "integer"},
+              "lag": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "workers": {
+      "type": "object",
+      "required": ["asg", "launch_template", "nodes"],
+      "additionalProperties": false,
+      "properties": {
+        "asg": {
+          "type": "object", "required": ["name", "ami"], "additionalProperties": false,
+          "properties": {"name": {"type": "string"}, "ami": {"type": "string"}}
+        },
+        "launch_template": {
+          "type": "object", "required": ["id", "version", "ami", "pending"], "additionalProperties": false,
+          "properties": {
+            "id": {"type": "string"}, "version": {"type": "integer"}, "ami": {"type": "string"},
+            "pending": {"type": "object", "description": "Changes queued on the template besides the AMI."}
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "ami", "kubelet", "ready", "db", "eviction_s"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string"}, "ami": {"type": "string"}, "kubelet": {"type": "string"},
+              "ready": {"type": "boolean"},
+              "db": {"type": ["string", "null"], "description": "Stateful service hosted, if any."},
+              "eviction_s": {"type": "integer", "description": "Measured time to evict this node's pods."}
+            }
+          }
+        }
+      }
+    },
+    "pdbs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "workload", "nodes", "min_available", "current_healthy"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"}, "workload": {"type": "string"},
+          "nodes": {"type": "array", "items": {"type": "string"}},
+          "min_available": {"type": "integer"}, "current_healthy": {"type": "integer"}
+        }
+      }
+    },
+    "addons": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object", "required": ["version", "healthy"], "additionalProperties": false,
+        "properties": {"version": {"type": "string"}, "healthy": {"type": "boolean"}}
+      }
+    },
+    "kube_system": {
+      "type": "object", "required": ["pods_total", "pods_running"], "additionalProperties": false,
+      "properties": {"pods_total": {"type": "integer"}, "pods_running": {"type": "integer"}}
+    },
+    "workload": {
+      "type": "object", "required": ["pods_total", "pods_running", "running_ratio", "unreachable"], "additionalProperties": false,
+      "properties": {
+        "pods_total": {"type": "integer"}, "pods_running": {"type": "integer"},
+        "running_ratio": {"type": "number"}, "unreachable": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "alerts": {"type": "array", "items": {"type": "string"}},
+    "monitor": {
+      "type": "object", "required": ["nodes_ready", "etcd_members_up"], "additionalProperties": false,
+      "properties": {"nodes_ready": {"type": "integer"}, "etcd_members_up": {"type": "integer"}}
+    },
+    "backups": {
+      "type": "object", "required": ["etcd_snapshot"], "additionalProperties": false,
+      "properties": {
+        "etcd_snapshot": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "required": ["id", "taken_at", "max_raft_index"], "additionalProperties": false,
+              "properties": {"id": {"type": "string"}, "taken_at": {"type": "string", "format": "date-time"}, "max_raft_index": {"type": "integer"}}
+            }
+          ]
+        }
+      }
+    }
+  }
+}

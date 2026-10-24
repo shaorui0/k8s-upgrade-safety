@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "upgrade_safety/contracts/step.schema.json",
+  "title": "Step",
+  "description": "One reconcile unit: move one dimension of observed state toward desired and prove the delta was consumed. The definition is data; the engine (control plane) interprets it and the executor (execution plane) performs the single `execute` action. The executor never decides what runs next.",
+  "type": "object",
+  "required": ["id", "goal", "layer", "reversible", "precheck", "execute", "postcheck", "gate"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string"},
+    "goal": {"type": "string"},
+    "layer": {"type": "string", "enum": ["master", "worker", "components"], "description": "Dependency layer, serial between layers. Orthogonal to blast-radius tiers inside a layer."},
+    "reversible": {"type": "boolean", "description": "true: undone by re-pointing or rollout undo. false: needs a proven backup; refused without one."},
+    "backup_precondition": {"type": "string", "description": "Assertion id (e.g. etcd-snapshot-fresh) that must hold before an irreversible step may execute."},
+    "blast_radius": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unit": {"type": "string", "enum": ["node", "batch", "asg", "cluster"]},
+        "phase": {"type": "string", "enum": ["canary", "batch", "rollout"]},
+        "batch": {"type": ["integer", "string"], "description": "1 for a canary, then a count or a percentage"},
+        "nodes": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "precheck": {"type": "array", "items": {"$ref": "#/definitions/assertion"}},
+    "already_done": {"$ref": "#/definitions/assertion", "description": "If this holds before execute, the step is converged and skipped (idempotent re-entry)."},
+    "execute": {
+      "type": "object",
+      "required": ["engine", "action", "idempotent"],
+      "additionalProperties": false,
+      "properties": {
+        "engine": {"type": "string", "enum": ["terraform", "ansible", "aws"], "description": "The real tool class this action belongs to."},
+        "action": {"type": "string"},
+        "args": {"type": "object"},
+        "idempotent": {"type": "boolean", "const": true}
+      }
+    },
+    "postcheck": {"type": "array", "items": {"$ref": "#/definitions/assertion"}},
+    "gate": {
+      "type": "object",
+      "required": ["policy", "signoff", "on_fail"],
+      "additionalProperties": false,
+      "properties": {
+        "policy": {"type": "string", "enum": ["manual", "assisted", "auto"]},
+        "signoff": {"type": "boolean", "description": "Under manual policy: an operator signature is required before execute."},
+        "on_fail": {"type": "string", "enum": ["stop", "rollback"]}
+      }
+    }
+  },
+  "if": {"properties": {"reversible": {"const": false}}, "required": ["reversible"]},
+  "then": {"required": ["backup_precondition"]},
+  "definitions": {
+    "assertion": {
+      "type": "object",
+      "required": ["id", "probe", "op", "expected", "severity", "why"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "probe": {"type": "string", "description": "Registered probe name, e.g. etcd.max_raft_lag. Baseline-relative probes end in _delta or _new_count and compare baseline with after."},
+        "args": {"type": "object"},
+        "op": {"type": "string", "enum": ["==", "!=", "<", "<=", ">", ">="]},
+        "expected": {"type": ["number", "boolean", "string"], "description": "Literal, or $target / $target_ami resolved from the snapshot meta."},
+        "severity": {"type": "string", "enum": ["block", "warn"]},
+        "why": {"type": "string"}
+      }
+    }
+  }
+}

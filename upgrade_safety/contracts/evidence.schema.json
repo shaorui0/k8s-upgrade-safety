@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "upgrade_safety/contracts/evidence.schema.json",
+  "title": "EvidenceRecord",
+  "description": "One append-only record per step attempt (a line of evidence.jsonl). Answers what was done, what it looked like before, what it looked like after, and who or what decided to continue.",
+  "type": "object",
+  "required": ["step_id", "run_id", "cluster", "started_at", "finished_at", "outcome", "baseline_snapshot", "postcheck_snapshot", "dry_run_diff", "assertions", "gate_decision", "operator"],
+  "additionalProperties": false,
+  "properties": {
+    "step_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "cluster": {"type": "string"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "outcome": {"type": "string", "enum": ["converged_skipped", "applied_pass", "stopped_precheck", "stopped_postcheck", "rolled_back", "halted_by_operator"]},
+    "baseline_snapshot": {"type": "string", "description": "Path of the snapshot taken before the step (snapshot contract)."},
+    "postcheck_snapshot": {"type": ["string", "null"]},
+    "dry_run_diff": {"type": ["string", "null"], "description": "Path of the diff artifact the gate decided against."},
+    "execute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engine": {"type": "string"},
+        "executor": {"type": "string", "description": "Which implementation actually ran it, e.g. simulated."},
+        "command": {"type": "string"},
+        "exit_code": {"type": "integer"},
+        "stdout": {"type": "string"},
+        "config_diff": {"type": "string"}
+      }
+    },
+    "assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "phase", "passed"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "phase": {"type": "string", "enum": ["precheck", "postcheck", "backup", "already_done"]},
+          "probe": {"type": "string"},
+          "measured": {},
+          "expected": {},
+          "op": {"type": "string"},
+          "passed": {"type": "boolean"},
+          "severity": {"type": "string", "enum": ["block", "warn"]},
+          "detail": {"type": "string"}
+        }
+      }
+    },
+    "gate_decision": {
+      "type": "object",
+      "required": ["policy", "decision", "decided_by", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "policy": {"type": "string", "enum": ["manual", "assisted", "auto"]},
+        "decision": {"type": "string", "enum": ["continue", "stop", "rollback"]},
+        "decided_by": {"type": "string", "description": "Operator id (manual) or 'engine' (assisted, auto, and any automatic stop)."},
+        "reason": {"type": "string"}
+      }
+    },
+    "operator": {"type": "string"}
+  }
+}

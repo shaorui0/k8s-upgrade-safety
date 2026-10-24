@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "upgrade_safety/contracts/diff.schema.json",
+  "title": "Diff",
+  "description": "The dry-run artifact: desired state compared with an observed snapshot. Changes nothing. A human reads it at the manual gate; the machine reads `verdict` at the assisted and auto gates.",
+  "type": "object",
+  "required": ["meta", "desired", "reversible", "changes", "alignment", "blast_radius", "verdict"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["cluster", "computed_at", "from_version", "to_version", "snapshot_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "cluster": {"type": "string"},
+        "computed_at": {"type": "string", "format": "date-time"},
+        "from_version": {"type": "string"},
+        "to_version": {"type": "string"},
+        "snapshot_ref": {"type": "string", "description": "Path of the snapshot this diff was computed against."}
+      }
+    },
+    "desired": {
+      "type": "object", "required": ["target_version", "target_ami"], "additionalProperties": false,
+      "properties": {"target_version": {"type": "string"}, "target_ami": {"type": ["string", "null"]}}
+    },
+    "reversible": {"type": "boolean", "description": "True only if every change can be undone by re-pointing; one irreversible change makes the whole diff irreversible and raises the gate."},
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["target", "field", "before", "after", "reversible"],
+        "additionalProperties": false,
+        "properties": {
+          "target": {"type": "string", "description": "e.g. master/<name>/apiserver, asg/<name>, lt/<id>, addon/ccm"},
+          "field": {"type": "string", "enum": ["component_version", "ami_id", "launch_template_version", "addon_version"]},
+          "before": {"type": ["string", "integer", "null"]},
+          "after": {"type": ["string", "integer", "null"]},
+          "reversible": {"type": "boolean"},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "alignment": {
+      "type": "object", "required": ["aligned", "control_plane", "per_asg"], "additionalProperties": false,
+      "properties": {
+        "aligned": {"type": "boolean", "description": "Observed pointers all agree with each other before the change (drift is a diff, not a surprise)."},
+        "control_plane": {
+          "type": "object", "required": ["aligned", "lagging"], "additionalProperties": false,
+          "properties": {"aligned": {"type": "boolean"}, "lagging": {"type": "array", "items": {"type": "string"}}}
+        },
+        "per_asg": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["asg", "asg_ami", "launch_template_ami", "node_amis", "aligned", "explanation"],
+            "additionalProperties": false,
+            "properties": {
+              "asg": {"type": "string"}, "asg_ami": {"type": "string"}, "launch_template_ami": {"type": "string"},
+              "node_amis": {"type": "array", "items": {"type": "string"}},
+              "aligned": {"type": "boolean", "description": "asg ami == launch template ami == every running node's ami"},
+              "explanation": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "blast_radius": {
+      "type": "object",
+      "required": ["etcd_members", "tolerated_unavailable", "serial", "worst_case_masters_down", "within_quorum", "worker_tiers"],
+      "additionalProperties": false,
+      "properties": {
+        "etcd_members": {"type": "integer"}, "tolerated_unavailable": {"type": "integer"}, "serial": {"type": "integer"},
+        "worst_case_masters_down": {"type": "integer"}, "within_quorum": {"type": "boolean"},
+        "worker_tiers": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["phase", "nodes"], "additionalProperties": false,
+            "properties": {"phase": {"type": "string", "enum": ["canary", "batch", "rollout"]}, "nodes": {"type": "array", "items": {"type": "string"}}}
+          }
+        }
+      }
+    },
+    "verdict": {
+      "type": "object", "required": ["safe_to_apply", "blockers", "warnings"], "additionalProperties": false,
+      "properties": {
+        "safe_to_apply": {"type": "boolean"},
+        "blockers": {"type": "array", "items": {"type": "string"}},
+        "warnings": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
