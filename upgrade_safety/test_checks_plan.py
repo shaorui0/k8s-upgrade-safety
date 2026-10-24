@@ -100,6 +100,16 @@ class PlanTest(unittest.TestCase):
         self.assertTrue(any("drain_timeout_s 300s" in w for w in self.plan("prod-eu")["warnings"]))
         self.assertEqual(self.plan("preprod-1")["warnings"], [])
 
+    def test_serial_beyond_quorum_tolerance_is_a_violation(self):
+        old = plan.SERIAL
+        plan.SERIAL = 2
+        try:
+            p = self.plan("dev-1")
+        finally:
+            plan.SERIAL = old
+        self.assertFalse(p["blast_radius"]["within_quorum"])
+        self.assertTrue(any("exceeds quorum tolerance" in v for v in p["violations"]))
+
     def test_render_mentions_serial_and_gate(self):
         text = plan.render(self.plan("prod-canary"))
         self.assertIn("serial=1", text)

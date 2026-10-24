@@ -1,0 +1,12 @@
+# 0003-pipeline-skeleton notes
+
+- Evidence is the product. Each step writes a JSON snapshot, a log line and a state transition; the HTML report is just a view over those files. If the report cannot be built from the files, the files are incomplete.
+- State on disk makes resume trivial and honest: completed steps are skipped, an in-progress step is re-run, so every mutating step has to be idempotent. "Idempotent" stopped being a slogan the moment a test counted START lines in the log.
+- A gate step that is waiting for approval stays `pending` and logs no START. If it logged START, the resume test (exactly one START per completed step) would be ambiguous.
+- Not every failure is a rollback. A PDB blocking a drain fires no rollback trigger: the cluster is in a known state and a person should fix the cause. Only declared triggers (master step failed, over 50% pods not Running, critical service down, alert flood) recommend rolling back. Rollback is advice, never executed.
+- The apiserver gate is two checks, not one: `/readyz` and load-balancer membership. My first test only used the planted fault, which fails both, so removing the `/readyz` check left the suite green. A mutation check found it (see the mutation script), a readyz-only test fixed it. 2 of 13 gate mutations survived on the first pass: baseline-regression diff and the serial-vs-quorum rule.
+- Defence in depth for the gate: the order of steps already prevents controller-manager from running before the apiserver is ready, and the step itself also refuses. Tested by calling the step directly with the gate state forged.
+- Drain checks cover the whole batch before any node is replaced, so a blocked batch leaves the cluster untouched, not half-replaced.
+- Plan warnings versus violations: a PDB at zero or an eviction slower than the timeout is a warning in plan (the human sees it at the gate) and a stop in apply. Arguably the plan could fail on it. I kept it as a warning because the decision (wait, lower minAvailable, set the 600 s flag) is a human one either way.
+- CCM fault design: healthy now, unhealthy after the rollout. If it were unhealthy now, `check` would stop it and the addon gate would never be exercised.
+- The model chose "workers then addons" order from the write-up, which means a broken CCM rollout is found after workers are replaced. The CCM-first rule still matters because the Cluster Autoscaler scale-out check needs new nodes to initialise. Worth revisiting whether CCM should be a precondition of the worker layer.

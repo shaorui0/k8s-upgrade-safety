@@ -121,6 +121,18 @@ class ApiserverGateTest(Base):
         self.assertNotIn("START master:prod-north-m3", self.log(rd))
         self.assertEqual(self.world(rd)["workers"]["asg"]["ami"], "ami-synth-125")
 
+    def test_readyz_alone_is_enough_to_stop(self):
+        import yaml
+        d = json.loads(json.dumps(FLEET.data))
+        d["clusters"][0]["masters"][0]["readyz_after_upgrade"] = False      # LB stays healthy
+        p = Path(self.runs) / "readyz.yaml"
+        p.write_text(yaml.safe_dump(d))
+        code, out = self.cli("run", "--cluster", "dev-1", "--approve", "--run-id", "readyz", fleet=p)
+        self.assertEqual(code, 1)
+        self.assertIn("/readyz failed", out)
+        w = self.world(Path(self.runs) / "readyz")
+        self.assertEqual((w["masters"][0]["controller_manager"], w["masters"][0]["scheduler"]), ("1.25", "1.25"))
+
     def test_lb_membership_is_a_separate_gate(self):
         c = FLEET.cluster("dev-1")
         c["masters"][0]["lb_after_upgrade"] = "unhealthy"          # /readyz fine, LB says no
@@ -288,6 +300,20 @@ class VerifyTest(Base):
         self.assertEqual(code, 1)
         self.assertEqual(self.state(rd)["decision"], "human")
         self.assertIn("new alerts since baseline", self.state(rd)["reason"])
+
+    def test_baseline_regression_alone_blocks_proceed(self):
+        """Criteria all pass, but fewer pods Running than the baseline: only the baseline diff can see it."""
+        code, _, rd = self.run_cluster("run", "dev-1", "--approve")
+        self.assertEqual(code, 0)
+        w = self.world(rd)
+        w["workload"]["pods_running"] -= 10
+        (rd / "cluster.json").write_text(json.dumps(w))
+        code, _ = self.cli("verify", "--cluster", "dev-1", "--resume", rd.name)
+        self.assertEqual(code, 1)
+        d = json.loads((rd / "diff.json").read_text())
+        self.assertEqual(d["failed_criteria"], [])
+        self.assertEqual(d["diff"]["regressions"], ["Running pods 60 -> 50"])
+        self.assertEqual(d["quadrant"]["decision"], "human")
 
     def test_verify_refuses_an_incomplete_apply(self):
         _, _, rd = self.run_cluster("run", "prod-south", "--approve")

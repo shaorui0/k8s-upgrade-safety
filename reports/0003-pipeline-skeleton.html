@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>0003-pipeline-skeleton</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">0003-pipeline-skeleton</h1>
+</header>
+<h1 id="c0003-pipeline-skeleton">c0003 pipeline skeleton</h1>
+<p><strong>What changed.</strong>
+<code>python3 -m upgrade_safety &lt;check|plan|apply|verify|run&gt;</code>:
+fixed check criteria (raft lag 1000), dry-run plan with AMI/Launch
+Template diff and quorum blast radius, approval gate (exit 2, nothing
+changes), a sign-off per master, the apiserver gate
+(<code>/readyz</code> + load-balancer membership before anything else on
+that master), worker batches (stateful first, never forced), addon order
+CCM, CNI, Cluster Autoscaler, version x health quadrant against the
+baseline file, rollback advice per layer, resume from state, fleet order
+with pause on first failure, HTML report per run.</p>
+<p><strong>Why.</strong> The method exists as a document (c0001) and the
+fleet has planted faults (c0002). This makes every gate executable and
+every step leave evidence.</p>
+<p><strong>Verdict.</strong> 84 tests green; the DoD command completes
+with decision proceed and writes <code>report.html</code>; all five
+planted faults stop at the step the ground truth names; resume repeats
+no completed step; 13/13 gate mutations are caught by the tests (two
+survived on the first pass, tests added); scan OK, 0 private-pattern
+hits, <code>openspec validate</code> passes.</p>
+<h1 id="acceptance-evidence-verbatim">Acceptance evidence
+(verbatim)</h1>
+<h2 id="all-tests-verbose">3.1 all tests (verbose)</h2>
+<pre><code>$ python3 -m unittest discover -v 2&gt;&amp;1; python3 -m unittest discover -s tools 2&gt;&amp;1 | tail -3
+test_clean_cluster_passes_all_eight (upgrade_safety.test_checks_plan.CheckTest.test_clean_cluster_passes_all_eight) ... ok
+test_even_members_offline_and_two_leaders (upgrade_safety.test_checks_plan.CheckTest.test_even_members_offline_and_two_leaders) ... ok
+test_external_alert_fails (upgrade_safety.test_checks_plan.CheckTest.test_external_alert_fails) ... ok
+test_monitor_disagreement_fails (upgrade_safety.test_checks_plan.CheckTest.test_monitor_disagreement_fails) ... ok
+test_node_not_ready_and_kube_system (upgrade_safety.test_checks_plan.CheckTest.test_node_not_ready_and_kube_system) ... ok
+test_raft_lag_2000_fails (upgrade_safety.test_checks_plan.CheckTest.test_raft_lag_2000_fails) ... ok
+test_raft_lag_boundary (upgrade_safety.test_checks_plan.CheckTest.test_raft_lag_boundary) ... ok
+test_batches_stateful_first_alone_and_20_percent (upgrade_safety.test_checks_plan.PlanTest.test_batches_stateful_first_alone_and_20_percent) ... ok
+test_clean_plan (upgrade_safety.test_checks_plan.PlanTest.test_clean_plan) ... ok
+test_launch_template_may_only_change_ami (upgrade_safety.test_checks_plan.PlanTest.test_launch_template_may_only_change_ami) ... ok
+test_not_one_minor_is_a_violation (upgrade_safety.test_checks_plan.PlanTest.test_not_one_minor_is_a_violation) ... ok
+test_render_mentions_serial_and_gate (upgrade_safety.test_checks_plan.PlanTest.test_render_mentions_serial_and_gate) ... ok
+test_serial_beyond_quorum_tolerance_is_a_violation (upgrade_safety.test_checks_plan.PlanTest.test_serial_beyond_quorum_tolerance_is_a_violation) ... ok
+test_warnings_surface_faults_before_approval (upgrade_safety.test_checks_plan.PlanTest.test_warnings_surface_faults_before_approval) ... ok
+test_minor_rejects_garbage (upgrade_safety.test_model.ArithmeticTest.test_minor_rejects_garbage) ... ok
+test_nothing_newer_than_apiserver (upgrade_safety.test_model.ArithmeticTest.test_nothing_newer_than_apiserver) ... ok
+test_quorum (upgrade_safety.test_model.ArithmeticTest.test_quorum) ... ok
+test_skew_cm_and_scheduler (upgrade_safety.test_model.ArithmeticTest.test_skew_cm_and_scheduler) ... ok
+test_skew_kubelet (upgrade_safety.test_model.ArithmeticTest.test_skew_kubelet) ... ok
+test_apiserver_not_ready_fault (upgrade_safety.test_model.GroundTruthTest.test_apiserver_not_ready_fault) ... ok
+test_at_least_four_distinct_fault_kinds (upgrade_safety.test_model.GroundTruthTest.test_at_least_four_distinct_fault_kinds) ... ok
+test_ccm_rollout_unhealthy (upgrade_safety.test_model.GroundTruthTest.test_ccm_rollout_unhealthy) ... ok
+test_clean_clusters_have_no_fault_fields (upgrade_safety.test_model.GroundTruthTest.test_clean_clusters_have_no_fault_fields) ... ok
+test_flagged_exception_is_a_positive_case (upgrade_safety.test_model.GroundTruthTest.test_flagged_exception_is_a_positive_case) ... ok
+test_pdb_allows_zero_disruptions (upgrade_safety.test_model.GroundTruthTest.test_pdb_allows_zero_disruptions) ... ok
+test_raft_lag_2000 (upgrade_safety.test_model.GroundTruthTest.test_raft_lag_2000) ... ok
+test_slow_eviction_without_flag (upgrade_safety.test_model.GroundTruthTest.test_slow_eviction_without_flag) ... ok
+test_cluster_is_a_copy (upgrade_safety.test_model.LoadTest.test_cluster_is_a_copy) ... ok
+test_order_canary_before_other_prod_and_management_last (upgrade_safety.test_model.LoadTest.test_order_canary_before_other_prod_and_management_last) ... ok
+test_shape (upgrade_safety.test_model.LoadTest.test_shape) ... ok
+test_target_ami (upgrade_safety.test_model.LoadTest.test_target_ami) ... ok
+test_unknown_cluster (upgrade_safety.test_model.LoadTest.test_unknown_cluster) ... ok
+test_even_master_count (upgrade_safety.test_model.ValidationTest.test_even_master_count) ... ok
+test_missing_stage (upgrade_safety.test_model.ValidationTest.test_missing_stage) ... ok
+test_pdb_unknown_node (upgrade_safety.test_model.ValidationTest.test_pdb_unknown_node) ... ok
+test_reports_every_problem_at_once (upgrade_safety.test_model.ValidationTest.test_reports_every_problem_at_once) ... ok
+test_valid_fleet_has_no_problems (upgrade_safety.test_model.ValidationTest.test_valid_fleet_has_no_problems) ... ok
+test_addon_order_is_enforced (upgrade_safety.test_pipeline.AddonLayerTest.test_addon_order_is_enforced) ... ok
+test_ccm_unhealthy_stops_the_addon_layer_with_a_reason (upgrade_safety.test_pipeline.AddonLayerTest.test_ccm_unhealthy_stops_the_addon_layer_with_a_reason) ... ok
+test_lb_membership_is_a_separate_gate (upgrade_safety.test_pipeline.ApiserverGateTest.test_lb_membership_is_a_separate_gate) ... ok
+test_leader_transfer_is_logged_as_expected (upgrade_safety.test_pipeline.ApiserverGateTest.test_leader_transfer_is_logged_as_expected) ... ok
+test_member_that_does_not_come_back_is_the_danger (upgrade_safety.test_pipeline.ApiserverGateTest.test_member_that_does_not_come_back_is_the_danger) ... ok
+test_next_component_refuses_if_gate_was_skipped (upgrade_safety.test_pipeline.ApiserverGateTest.test_next_component_refuses_if_gate_was_skipped) ... ok
+test_readyz_alone_is_enough_to_stop (upgrade_safety.test_pipeline.ApiserverGateTest.test_readyz_alone_is_enough_to_stop) ... ok
+test_readyz_failure_stops_before_next_component (upgrade_safety.test_pipeline.ApiserverGateTest.test_readyz_failure_stops_before_next_component) ... ok
+test_apply_without_approve_refuses_and_prints_plan (upgrade_safety.test_pipeline.ApproveGateTest.test_apply_without_approve_refuses_and_prints_plan) ... ok
+test_approving_via_resume_continues_the_same_run (upgrade_safety.test_pipeline.ApproveGateTest.test_approving_via_resume_continues_the_same_run) ... ok
+test_each_master_is_signed_off_individually_in_order (upgrade_safety.test_pipeline.ApproveGateTest.test_each_master_is_signed_off_individually_in_order) ... ok
+test_run_without_approve_also_refuses (upgrade_safety.test_pipeline.ApproveGateTest.test_run_without_approve_also_refuses) ... ok
+test_clean_check_takes_snapshot (upgrade_safety.test_pipeline.CheckGateTest.test_clean_check_takes_snapshot) ... ok
+test_raft_lag_over_1000_fails_check_and_mutates_nothing (upgrade_safety.test_pipeline.CheckGateTest.test_raft_lag_over_1000_fails_check_and_mutates_nothing) ... ok
+test_run_stops_at_check_for_raft_lag (upgrade_safety.test_pipeline.CheckGateTest.test_run_stops_at_check_for_raft_lag) ... ok
+test_python_dash_m_exit_codes (upgrade_safety.test_pipeline.EntryPointTest.test_python_dash_m_exit_codes) ... ok
+test_complete_run_leaves_all_evidence (upgrade_safety.test_pipeline.EvidenceTest.test_complete_run_leaves_all_evidence) ... ok
+test_report_escapes_hostile_data (upgrade_safety.test_pipeline.EvidenceTest.test_report_escapes_hostile_data) ... ok
+test_report_exists_for_failed_and_awaiting_runs (upgrade_safety.test_pipeline.EvidenceTest.test_report_exists_for_failed_and_awaiting_runs) ... ok
+test_report_html_is_escaped_and_has_the_decision (upgrade_safety.test_pipeline.EvidenceTest.test_report_html_is_escaped_and_has_the_decision) ... ok
+test_clean_clusters_complete (upgrade_safety.test_pipeline.FaultMatrixTest.test_clean_clusters_complete) ... ok
+test_each_fault_stops_where_expected (upgrade_safety.test_pipeline.FaultMatrixTest.test_each_fault_stops_where_expected) ... ok
+test_fleet_runs_in_order_and_pauses_on_first_failure (upgrade_safety.test_pipeline.FleetTest.test_fleet_runs_in_order_and_pauses_on_first_failure) ... ok
+test_fleet_without_approve_stops_at_first_gate (upgrade_safety.test_pipeline.FleetTest.test_fleet_without_approve_stops_at_first_gate) ... ok
+test_unknown_cluster_and_bad_fleet (upgrade_safety.test_pipeline.FleetTest.test_unknown_cluster_and_bad_fleet) ... ok
+test_four_quadrants (upgrade_safety.test_pipeline.QuadrantTest.test_four_quadrants) ... ok
+test_mixed_version_counts_as_old (upgrade_safety.test_pipeline.QuadrantTest.test_mixed_version_counts_as_old) ... ok
+test_existing_run_id_is_not_overwritten (upgrade_safety.test_pipeline.ResumeTest.test_existing_run_id_is_not_overwritten) ... ok
+test_mutating_steps_are_idempotent (upgrade_safety.test_pipeline.ResumeTest.test_mutating_steps_are_idempotent) ... ok
+test_resume_after_failure_keeps_earlier_work (upgrade_safety.test_pipeline.ResumeTest.test_resume_after_failure_keeps_earlier_work) ... ok
+test_resume_does_not_repeat_completed_steps (upgrade_safety.test_pipeline.ResumeTest.test_resume_does_not_repeat_completed_steps) ... ok
+test_layer_actions (upgrade_safety.test_pipeline.RollbackAdviceTest.test_layer_actions) ... ok
+test_master_failure_fires_trigger_with_control_plane_actions (upgrade_safety.test_pipeline.RollbackAdviceTest.test_master_failure_fires_trigger_with_control_plane_actions) ... ok
+test_pdb_stop_fires_no_trigger_and_nothing_executes (upgrade_safety.test_pipeline.RollbackAdviceTest.test_pdb_stop_fires_no_trigger_and_nothing_executes) ... ok
+test_triggers_pods_services_alert_flood (upgrade_safety.test_pipeline.RollbackAdviceTest.test_triggers_pods_services_alert_flood) ... ok
+test_baseline_regression_alone_blocks_proceed (upgrade_safety.test_pipeline.VerifyTest.test_baseline_regression_alone_blocks_proceed)
+Criteria all pass, but fewer pods Running than the baseline: only the baseline diff can see it. ... ok
+test_monitor_disagreement_blocks_proceed (upgrade_safety.test_pipeline.VerifyTest.test_monitor_disagreement_blocks_proceed) ... ok
+test_new_alert_after_upgrade_is_a_regression_and_human (upgrade_safety.test_pipeline.VerifyTest.test_new_alert_after_upgrade_is_a_regression_and_human) ... ok
+test_old_version_healthy_is_rerun (upgrade_safety.test_pipeline.VerifyTest.test_old_version_healthy_is_rerun) ... ok
+test_verify_diffs_against_the_baseline_file (upgrade_safety.test_pipeline.VerifyTest.test_verify_diffs_against_the_baseline_file) ... ok
+test_verify_refuses_an_incomplete_apply (upgrade_safety.test_pipeline.VerifyTest.test_verify_refuses_an_incomplete_apply) ... ok
+test_flagged_preprod_passes (upgrade_safety.test_pipeline.WorkerLayerTest.test_flagged_preprod_passes) ... ok
+test_new_node_stuck_when_ccm_unhealthy_now (upgrade_safety.test_pipeline.WorkerLayerTest.test_new_node_stuck_when_ccm_unhealthy_now) ... ok
+test_pdb_blocks_drain_and_nothing_is_forced (upgrade_safety.test_pipeline.WorkerLayerTest.test_pdb_blocks_drain_and_nothing_is_forced) ... ok
+test_slow_eviction_needs_the_600s_flag (upgrade_safety.test_pipeline.WorkerLayerTest.test_slow_eviction_needs_the_600s_flag) ... ok
+test_stateful_nodes_go_first_and_alone (upgrade_safety.test_pipeline.WorkerLayerTest.test_stateful_nodes_go_first_and_alone) ... ok
+test_workers_never_lead_the_control_plane (upgrade_safety.test_pipeline.WorkerLayerTest.test_workers_never_lead_the_control_plane) ... ok
+
+----------------------------------------------------------------------
+Ran 84 tests in 4.011s
+
+OK
+
+OK
+FAIL leak pattern in x.md:1
+exit=0</code></pre>
+<h2 id="the-dod-command">3.2 the DoD command</h2>
+<pre><code>$ python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-canary --target 1.26 --approve; ls runs/*/ runs/*/snapshots; ls runs/*/report.html
+[prod-canary] run: COMPLETE  run=20261023-163657-prod-canary-run  steps 36/36 completed
+PLAN prod-canary (prod-canary, workload): 1.25 -&gt; 1.26
+  blast radius: 3 etcd members tolerate 1; serial=1 =&gt; worst case 1 master down (within quorum)
+  control plane, per master (each master needs its own sign-off):
+    gate -&gt; apiserver -&gt; apiserver_ready -&gt; controller_manager -&gt; scheduler -&gt; kubelet -&gt; verify
+    masters in order: prod-canary-m1, prod-canary-m2, prod-canary-m3
+  workers: AMI ami-synth-125 -&gt; ami-synth-126 (kubelet 1.26); launch template changes: ami
+    batches (stateful nodes first, alone): prod-canary-w1 | prod-canary-w2 | prod-canary-w3 | prod-canary-w4 | prod-canary-w5; drain timeout 600s, never forced
+  addons in order: ccm -&gt; cni -&gt; cluster_autoscaler
+  verify decision: proceed
+  evidence: runs/20261023-163657-prod-canary-run/   report: runs/20261023-163657-prod-canary-run/report.html
+runs/20261023-163657-prod-canary-run/:
+cluster.json
+diff.json
+etcd-snapshot.json
+execution.log
+plan.json
+plan.txt
+report.html
+snapshots
+state.json
+
+runs/20261023-163657-prod-canary-run/snapshots:
+post.json
+pre.json
+runs/20261023-163657-prod-canary-run/report.html
+exit=0</code></pre>
+<h2
+id="execution-log-of-that-run-per-master-sign-off-leader-transfer-batches">execution
+log of that run: per-master sign-off, leader transfer, batches</h2>
+<pre><code>$ grep -E &#39;SIGNOFF|EVENT|VERIFY|START (check|snapshot|plan)|COMPLETE|batch&#39; runs/*prod-canary-run/execution.log | head -40
+2026-10-23T16:36:57+00:00 INFO  START check
+2026-10-23T16:36:57+00:00 INFO  START snapshot
+2026-10-23T16:36:57+00:00 INFO  START plan
+2026-10-23T16:36:57+00:00 INFO  SIGNOFF plan approved by operator (--approve)
+2026-10-23T16:36:57+00:00 INFO  SIGNOFF master prod-canary-m1 signed off by operator (--approve), one master at a time (serial=1)
+2026-10-23T16:36:57+00:00 INFO  EVENT leader transfer prod-canary-m1 -&gt; prod-canary-m2 is expected during a master upgrade
+2026-10-23T16:36:57+00:00 INFO  SIGNOFF master prod-canary-m2 signed off by operator (--approve), one master at a time (serial=1)
+2026-10-23T16:36:57+00:00 INFO  EVENT leader transfer prod-canary-m2 -&gt; prod-canary-m1 is expected during a master upgrade
+2026-10-23T16:36:57+00:00 INFO  SIGNOFF master prod-canary-m3 signed off by operator (--approve), one master at a time (serial=1)
+2026-10-23T16:36:57+00:00 INFO  START workers:batch1
+2026-10-23T16:36:57+00:00 INFO  VERIFY service kafka on prod-canary-w1 healthy after replacement (stateful node, alone)
+2026-10-23T16:36:57+00:00 INFO  DONE workers:batch1: batch 1: replaced prod-canary-w1 (drain timeout 600s, no force)
+2026-10-23T16:36:57+00:00 INFO  START workers:batch2
+2026-10-23T16:36:57+00:00 INFO  VERIFY service mysql on prod-canary-w2 healthy after replacement (stateful node, alone)
+2026-10-23T16:36:57+00:00 INFO  DONE workers:batch2: batch 2: replaced prod-canary-w2 (drain timeout 600s, no force)
+2026-10-23T16:36:57+00:00 INFO  START workers:batch3
+2026-10-23T16:36:57+00:00 INFO  DONE workers:batch3: batch 3: replaced prod-canary-w3 (drain timeout 600s, no force)
+2026-10-23T16:36:57+00:00 INFO  START workers:batch4
+2026-10-23T16:36:57+00:00 INFO  DONE workers:batch4: batch 4: replaced prod-canary-w4 (drain timeout 600s, no force)
+2026-10-23T16:36:57+00:00 INFO  START workers:batch5
+2026-10-23T16:36:57+00:00 INFO  DONE workers:batch5: batch 5: replaced prod-canary-w5 (drain timeout 600s, no force)
+2026-10-23T16:36:57+00:00 INFO  COMPLETE scope=run
+exit=0</code></pre>
+<h2 id="state-file-every-step-completed">state file: every step
+completed</h2>
+<pre><code>$ python3 -c &quot;import json,glob,collections; s=json.load(open(glob.glob(&#39;runs/*prod-canary-run/state.json&#39;)[0])); print(collections.Counter(x[&#39;status&#39;] for x in s[&#39;steps&#39;])); print(s[&#39;status&#39;], s[&#39;decision&#39;])&quot;
+Counter({&#39;completed&#39;: 36})
+complete proceed
+exit=0</code></pre>
+<h2 id="no-approve-stops-at-the-plan-exit-2-nothing-changes">no
+–approve: stops at the plan, exit 2, nothing changes</h2>
+<pre><code>$ python3 -m upgrade_safety apply --fleet testenv/fleet.yaml --cluster dev-1 --target 1.26 --run-id acc-noapprove &gt; acc-noapprove.out; echo &quot;apply exit code: $?&quot;; tail -4 acc-noapprove.out; rm acc-noapprove.out; echo &quot;log lines mentioning a master step: $(grep -c &#39;master:&#39; runs/acc-noapprove/execution.log)&quot;; python3 -c &quot;import json; w=json.load(open(&#39;runs/acc-noapprove/cluster.json&#39;)); print(&#39;masters apiserver versions:&#39;, sorted({m[&#39;apiserver&#39;] for m in w[&#39;masters&#39;]}))&quot;
+apply exit code: 2
+    batches (stateful nodes first, alone): dev-1-w1 | dev-1-w2 | dev-1-w3; drain timeout 300s, never forced
+  addons in order: ccm -&gt; cni -&gt; cluster_autoscaler
+NOT APPROVED: stopped at gate:plan; nothing was changed. Review the plan, then re-run with --approve (or --resume acc-noapprove --approve). Each master is signed off individually.
+  evidence: runs/acc-noapprove/   report: runs/acc-noapprove/report.html
+log lines mentioning a master step: 0
+masters apiserver versions: [&#39;1.25&#39;]
+exit=0</code></pre>
+<h2 id="fault-matrix-each-planted-fault-vs-ground-truth">3.3 fault
+matrix: each planted fault vs ground truth</h2>
+<pre><code>$ for c in prod-east prod-south prod-west prod-eu prod-north; do python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster $c --approve --run-id acc-$c &gt; /dev/null; python3 -c &quot;import json,yaml; s=json.load(open(&#39;runs/acc-$c/state.json&#39;)); f=[x for x in yaml.safe_load(open(&#39;testenv/fleet.yaml&#39;))[&#39;faults&#39;] if x[&#39;cluster&#39;]==&#39;$c&#39;][0]; print(&#39;%-11s %s stopped_at=%-42s expected=%s&#39; % (&#39;$c&#39;, f[&#39;id&#39;], s[&#39;stopped_at&#39;], f[&#39;expect_stop&#39;]))&quot;; done
+prod-east   F1 stopped_at=check                                      expected=check
+prod-south  F2 stopped_at=addon:ccm                                  expected=addon:ccm
+prod-west   F3 stopped_at=workers:batch1                             expected=workers:batch1
+prod-eu     F4 stopped_at=workers:batch3                             expected=workers:batch
+prod-north  F5 stopped_at=master:prod-north-m2:apiserver_ready       expected=master:prod-north-m2:apiserver_ready
+exit=0</code></pre>
+<h2 id="the-apiserver-gate-in-the-log-prod-north">the apiserver gate in
+the log (prod-north)</h2>
+<pre><code>$ grep -E &#39;master:prod-north-m2|prod-north-m3&#39; runs/acc-prod-north/execution.log; python3 -c &quot;import json; m={x[&#39;name&#39;]:x for x in json.load(open(&#39;runs/acc-prod-north/cluster.json&#39;))[&#39;masters&#39;]}; [print(n, &#39;apiserver&#39;, m[n][&#39;apiserver&#39;], &#39;cm&#39;, m[n][&#39;controller_manager&#39;], &#39;sched&#39;, m[n][&#39;scheduler&#39;], &#39;kubelet&#39;, m[n][&#39;kubelet&#39;]) for n in sorted(m)]&quot;; cat runs/acc-prod-north/rollback.json
+2026-10-23T16:36:58+00:00 INFO  START master:prod-north-m2:gate
+2026-10-23T16:36:58+00:00 INFO  DONE master:prod-north-m2:gate: prod-north-m2 signed off
+2026-10-23T16:36:58+00:00 INFO  START master:prod-north-m2:apiserver
+2026-10-23T16:36:58+00:00 INFO  DONE master:prod-north-m2:apiserver: apiserver 1.26 started; etcd leader moved prod-north-m2 -&gt; prod-north-m1 (expected, election 1-2 s); readiness is the next gate
+2026-10-23T16:36:58+00:00 INFO  START master:prod-north-m2:apiserver_ready
+2026-10-23T16:36:58+00:00 ERROR FAIL master:prod-north-m2:apiserver_ready: prod-north-m2: apiserver /readyz failed after upgrade; controller-manager, scheduler and kubelet on this master and all later masters are untouched
+prod-north-m1 apiserver 1.26 cm 1.26 sched 1.26 kubelet 1.26
+prod-north-m2 apiserver 1.26 cm 1.25 sched 1.25 kubelet 1.25
+prod-north-m3 apiserver 1.25 cm 1.25 sched 1.25 kubelet 1.25
+{
+  &quot;actions&quot;: [
+    &quot;restore the etcd snapshot taken in this run (data)&quot;,
+    &quot;downgrade the control-plane binaries on the touched masters (the snapshot does not restore binaries)&quot;
+  ],
+  &quot;failed_step&quot;: &quot;master:prod-north-m2:apiserver_ready&quot;,
+  &quot;fired_triggers&quot;: [
+    &quot;master_upgrade_failed&quot;
+  ],
+  &quot;layer&quot;: &quot;control_plane&quot;,
+  &quot;note&quot;: &quot;Declared trigger(s) fired: a human decides and executes; the system never rolls back on its own.&quot;,
+  &quot;reason&quot;: &quot;prod-north-m2: apiserver /readyz failed after upgrade; controller-manager, scheduler and kubelet on this master and all later masters are untouched&quot;,
+  &quot;recommended&quot;: true
+}
+exit=0</code></pre>
+<h2 id="pdb-nothing-forced-prod-west">PDB: nothing forced
+(prod-west)</h2>
+<pre><code>$ grep -E &#39;FAIL|ROLLBACK&#39; runs/acc-prod-west/execution.log; python3 -c &quot;import json; print(&#39;worker AMIs still in use:&#39;, sorted({n[&#39;ami&#39;] for n in json.load(open(&#39;runs/acc-prod-west/cluster.json&#39;))[&#39;workers&#39;][&#39;nodes&#39;]}))&quot;
+2026-10-23T16:36:58+00:00 ERROR FAIL workers:batch1: drain of prod-west-w1 blocked by PDB mysql-pdb (allows 0 disruptions); not forced. A human must wait for the PDB or lower minAvailable explicitly. No node in batch 1 was replaced; later batches untouched
+2026-10-23T16:36:58+00:00 WARN  ROLLBACK-ADVICE layer=workers fired=none (advice only; a human executes)
+worker AMIs still in use: [&#39;ami-synth-125&#39;]
+exit=0</code></pre>
+<h2
+id="resume-interrupt-then-continue-without-repeating-completed-steps">resume:
+interrupt, then continue without repeating completed steps</h2>
+<pre><code>$ python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --approve --run-id acc-demo --interrupt-at workers:batch1 &gt; /dev/null; echo &quot;interrupted run exit code: $?&quot;; python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --approve --resume acc-demo | head -1; echo &#39;START check lines (completed step, must be 1):&#39;; grep -c &#39;START check$&#39; runs/acc-demo/execution.log; echo &#39;START workers:batch1 lines (in-progress step re-ran, must be 2):&#39;; grep -c &#39;START workers:batch1$&#39; runs/acc-demo/execution.log; echo &#39;SKIP lines (completed steps not repeated):&#39;; grep -c &#39; SKIP &#39; runs/acc-demo/execution.log; grep -E &#39;INTERRUPT|COMPLETE&#39; runs/acc-demo/execution.log
+interrupted run exit code: 130
+[dev-1] run: COMPLETE  run=acc-demo  steps 34/34 completed
+START check lines (completed step, must be 1):
+1
+START workers:batch1 lines (in-progress step re-ran, must be 2):
+2
+SKIP lines (completed steps not repeated):
+26
+2026-10-23T16:36:59+00:00 WARN  INTERRUPT at workers:batch1 (simulated crash; step left in-progress)
+2026-10-23T16:36:59+00:00 INFO  COMPLETE scope=run
+exit=0</code></pre>
+<h2 id="fleet-order-and-pause-on-first-failure">fleet order and pause on
+first failure</h2>
+<pre><code>$ python3 -m upgrade_safety run --fleet testenv/fleet.yaml --approve --run-id acc-fleet | grep -E &#39;^\[|FLEET&#39;; python3 -c &#39;import json; d=json.load(open(&quot;runs/acc-fleet/fleet.json&quot;)); print(&quot;order:&quot;, d[&quot;order&quot;]); print(&quot;stopped_at:&quot;, d[&quot;stopped_at&quot;]); print(&quot;started:&quot;, list(d[&quot;runs&quot;]))&#39;
+[dev-1] run: COMPLETE  run=acc-fleet-dev-1  steps 34/34 completed
+[preprod-1] run: COMPLETE  run=acc-fleet-preprod-1  steps 35/35 completed
+[prod-canary] run: COMPLETE  run=acc-fleet-prod-canary  steps 36/36 completed
+[prod-east] run: FAILED  run=acc-fleet-prod-east  steps 0/36 completed
+FLEET PAUSED at prod-east: a human decides how to continue. Not started: prod-eu, prod-north, prod-south, prod-west, mgmt-1
+order: [&#39;dev-1&#39;, &#39;preprod-1&#39;, &#39;prod-canary&#39;, &#39;prod-east&#39;, &#39;prod-eu&#39;, &#39;prod-north&#39;, &#39;prod-south&#39;, &#39;prod-west&#39;, &#39;mgmt-1&#39;]
+stopped_at: prod-east
+started: [&#39;dev-1&#39;, &#39;preprod-1&#39;, &#39;prod-canary&#39;, &#39;prod-east&#39;]
+exit=0</code></pre>
+<h2 id="mutation-check-can-the-tests-fail">mutation check: can the tests
+fail?</h2>
+<pre><code>$ python3 tools/mutation_check.py
+killed   raft lag limit 1000 -&gt; 3000
+killed   apiserver /readyz gate removed
+killed   apiserver LB-membership gate removed
+killed   next-component guard removed
+killed   approval gate removed
+killed   completed steps re-executed on resume
+killed   PDB check removed from drain
+killed   drain timeout ignored
+killed   addon order not enforced
+killed   CCM rollout health ignored
+killed   quadrant: unhealthy still proceeds
+killed   baseline regressions ignored
+killed   serial may exceed quorum
+
+13/13 mutations killed
+exit=0</code></pre>
+<h2 id="scan-independent-grep-openspec">3.4 scan, independent grep,
+openspec</h2>
+<pre><code>$ python3 tools/check_rules.py; grep -rniE -f .leak_patterns.local --exclude-dir=.git --exclude=.leak_patterns.local --exclude-dir=runs . | wc -l; openspec validate c0003-pipeline-skeleton
+check_rules: OK
+       0
+Change &#39;c0003-pipeline-skeleton&#39; is valid
+exit=0</code></pre>
+</body>
+</html>

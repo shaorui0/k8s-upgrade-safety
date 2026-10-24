@@ -65,6 +65,7 @@ docs/REQUIREMENTS.md      R1.. requirement table and the data-boundary constrain
 upgrade_safety/           checks, plan, engine (steps, gates, resume), verify, evidence, report, cli
 testenv/                  fleet.yaml (9 clusters, 5 planted faults) and its generator
 tools/check_rules.py      leak scan; private patterns live in a gitignored .leak_patterns.local
+tools/mutation_check.py   break each gate once; the tests must go red (make mutation)
 openspec/changes/         one OpenSpec change per row of Progress, each with evidence.md
 reports/  notes/blog/     local HTML report and raw blog notes per change
 .claude/skills/upgrade-change-loop/   the per-change loop
@@ -79,6 +80,7 @@ One change = one OpenSpec change = staged commits, evidence, an HTML report and 
 |---|---|---|---|---|
 | c0001 requirements-and-method | 2026-10-24 | Requirements R1-R15, the state-machine method (gates, apiserver gate, quadrant, rollback, fleet order), leak scan | The real problem was never manual vs automated; it was that nobody could answer "what evidence says it is safe to proceed". | [report](reports/0001-requirements-and-method.html) · [notes](notes/blog/0001-requirements-and-method.md) |
 | c0002 synthetic-fleet | 2026-10-24 | Nine-cluster synthetic fleet, five planted faults with ground truth, loader/validator, skew and quorum math | A fault is only evidence for a gate if it is planted before the gate exists, as data, never as code keyed on a cluster name. | [report](reports/0002-synthetic-fleet.html) · [notes](notes/blog/0002-synthetic-fleet.md) |
+| c0003 pipeline-skeleton | 2026-10-24 | check/plan/apply/verify/run CLI: approval gate, per-master sign-off, apiserver gate, never-forced drains, addon order, quadrant vs baseline, rollback advice, resume, fleet order, HTML report | Evidence is the product: every step writes a snapshot, a log line and a state transition, and the report is only a view over those files. | [report](reports/0003-pipeline-skeleton.html) · [notes](notes/blog/0003-pipeline-skeleton.md) |
 
 ## License
 
