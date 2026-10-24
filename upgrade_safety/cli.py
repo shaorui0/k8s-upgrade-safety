@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from . import model, report
 from .engine import Engine, Interrupted
+from .executors import EXECUTORS
 from .evidence import RunDir
 
 COMMANDS = ("check", "plan", "apply", "verify", "run")
@@ -22,6 +23,9 @@ def parse(argv):
     p.add_argument("--target", help="target minor, e.g. 1.26 (default: the fleet's target_version)")
     p.add_argument("--approve", action="store_true", help="sign off the plan and each master (logged individually)")
     p.add_argument("--resume", metavar="RUN_ID", help="continue a run from its state.json")
+    p.add_argument("--operator", default="operator", help="operator id recorded in evidence")
+    p.add_argument("--executor", default="simulated", choices=sorted(EXECUTORS),
+                   help="execution plane; only 'simulated' is implemented")
     p.add_argument("--runs-dir", default="runs")
     p.add_argument("--run-id", help="explicit run id (default: timestamp-cluster-command)")
     p.add_argument("--interrupt-at", metavar="STEP", help="simulate a crash when this step starts (for resume tests)")
@@ -36,7 +40,7 @@ def run_one(args, fleet, cluster, run_id, resume, out):
     rd = RunDir(args.runs_dir, run_id, create=not resume)
     target = args.target or fleet.target_version
     eng = Engine(fleet, rd, cluster=cluster, target=target if not resume else args.target, approve=args.approve,
-                 interrupt_at=args.interrupt_at, resume=resume)
+                 interrupt_at=args.interrupt_at, resume=resume, executor=args.executor, operator=args.operator)
     try:
         if args.command == "verify":
             status = eng.verify_only() if resume else _verify_fresh(eng)
@@ -101,6 +105,9 @@ def main(argv=None, out=None):
                 return 2
         try:
             status, _ = run_one(args, fleet, args.cluster, rid, resume, out)
+        except NotImplementedError as ex:
+            print(f"error: {ex}", file=out)
+            return 2
         except (ValueError, FileNotFoundError) as ex:
             print(f"error: {ex}", file=out)
             return 2

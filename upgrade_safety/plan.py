@@ -1,129 +1,156 @@
-"""`plan`: a dry-run that can fail. Pure functions over a cluster dict."""
+"""`plan`: desired state compared with an observed snapshot, as a diff artifact.
+
+Level-triggered: nothing here remembers what was done before. It takes the
+desired state (target minor, target AMI) and an observed snapshot, and lists
+what differs. Changes nothing. The result conforms to `contracts/diff.schema.json`.
+"""
 import math
 
 from . import model
+from .evidence import now
+from .probes import blocking_pdbs
 
 SERIAL = 1            # masters changed at a time
-BATCH_PERCENT = 20    # ASG instance refresh batch size
-ADDON_ORDER = ["ccm", "cni", "cluster_autoscaler"]
+BATCH_PERCENT = 20    # worker batch size cap
+COMPONENTS = ("apiserver", "controller_manager", "scheduler", "kubelet")
+ADDONS = [("ccm", "ccm"), ("cni", "cni"), ("ca", "cluster_autoscaler")]
 
 
-def make_batches(c, percent=BATCH_PERCENT):
-    """Worker batches: stateful nodes first, each alone; the rest in `percent` chunks.
-
-    Batches never exceed `percent` of the group (rounded up, at least one node).
-    """
-    nodes = sorted(c["workers"]["nodes"], key=lambda n: n["name"])
+def make_batches(nodes, percent=BATCH_PERCENT):
+    """Stateful nodes first, each alone; the rest in `percent` chunks (at least one node, rounded up)."""
+    nodes = sorted(nodes, key=lambda n: n["name"])
     db = [n["name"] for n in nodes if n.get("db")]
     rest = [n["name"] for n in nodes if not n.get("db")]
     size = max(1, math.ceil(len(nodes) * percent / 100))
-    batches = [[x] for x in db]
-    batches += [rest[i:i + size] for i in range(0, len(rest), size)]
-    return batches
+    return [[x] for x in db] + [rest[i:i + size] for i in range(0, len(rest), size)]
 
 
-def blocking_pdbs(c, node_name):
-    """PDBs covering `node_name` that allow zero (or fewer) disruptions."""
-    return [p for p in c["pdbs"]
-            if node_name in p["nodes"] and p["current_healthy"] - p["min_available"] <= 0]
+def worker_tiers(nodes):
+    """Blast-radius tiers, orthogonal to layers: canary (one node), the first batch, then rollout batches."""
+    batches = make_batches(nodes)
+    if not batches:
+        return []
+    first = batches[0]
+    tiers = [{"phase": "canary", "nodes": [first[0]]}]
+    rest = ([first[1:]] if first[1:] else []) + batches[1:]
+    for i, b in enumerate(rest):
+        tiers.append({"phase": "batch" if i == 0 else "rollout", "nodes": b})
+    return tiers
 
 
-def build_plan(fleet, c, target):
-    src = c["version"]
-    violations, warnings = [], []
+def build_diff(fleet, snap, target, snapshot_ref="snapshots/baseline.json"):
+    src = max((m["apiserver"] for m in snap["masters"]), key=model.minor)
+    blockers, warnings, changes = [], [], []
     if model.minor(target) != model.minor(src) + 1:
-        violations.append(f"hop {src} -> {target} is not exactly one minor: kubeadm upgrades one minor at a time")
+        blockers.append(f"hop {src} -> {target} is not exactly one minor: kubeadm upgrades one minor at a time")
 
-    # control plane
-    steps = []
-    for m in c["masters"]:
-        for comp in ("apiserver", "controller_manager", "scheduler", "kubelet"):
-            steps.append({"master": m["name"], "component": comp, "from": m[comp], "to": target})
+    # control plane: every component of every master (in-place, irreversible)
+    lagging = []
+    for m in snap["masters"]:
+        for comp in COMPONENTS:
+            if m[comp] != target:
+                changes.append({"target": f"master/{m['name']}/{comp}", "field": "component_version",
+                                "before": m[comp], "after": target, "reversible": False,
+                                "note": "in-place kubeadm/kubelet upgrade; undo needs snapshot restore + binary downgrade"})
         if not model.skew_ok(target, "kubelet", m["kubelet"]):
-            violations.append(f"{m['name']}: kubelet {m['kubelet']} would violate skew against apiserver {target}")
+            blockers.append(f"{m['name']}: kubelet {m['kubelet']} would violate skew against apiserver {target}")
         for comp in ("controller_manager", "scheduler"):
             if not model.skew_ok(target, comp, m[comp]):
-                violations.append(f"{m['name']}: {comp} {m[comp]} would violate skew against apiserver {target}")
+                blockers.append(f"{m['name']}: {comp} {m[comp]} would violate skew against apiserver {target}")
+        lagging += [f"{m['name']}.{c}" for c in COMPONENTS if m[c] != max((x[c] for x in snap["masters"]), key=model.minor)]
 
-    # workers: AMI diff and Launch Template diff
-    asg = c["workers"]["asg"]
-    lt = asg["launch_template"]
-    new_ami = model.target_ami(fleet, target)
-    ami_diff = {"from": asg["ami"], "to": new_ami,
-                "target_kubelet": fleet.amis[new_ami]["kubelet"] if new_ami else None}
+    # workers: AMI and Launch Template (re-pointing: reversible)
+    asg, lt = snap["workers"]["asg"], snap["workers"]["launch_template"]
+    new_ami = snap["meta"]["target_ami"]
     if not new_ami:
-        violations.append(f"no AMI with kubelet {target}")
+        blockers.append(f"no AMI with kubelet {target}")
     elif fleet.amis[new_ami]["kubelet"] != target:
-        violations.append(f"AMI {new_ami} kubelet {fleet.amis[new_ami]['kubelet']} != target {target}")
-    proposed = dict(lt)
-    proposed.update(lt.get("pending", {}))          # anything else queued on the template
-    proposed.pop("pending", None)
-    proposed["ami"] = new_ami
-    base = {k: v for k, v in lt.items() if k != "pending"}
-    changed = {k: [base.get(k), proposed.get(k)] for k in sorted(set(base) | set(proposed))
-               if base.get(k) != proposed.get(k)}
-    for k in changed:
+        blockers.append(f"AMI {new_ami} kubelet {fleet.amis[new_ami]['kubelet']} != target {target}")
+    if new_ami and lt["ami"] != new_ami:
+        changes.append({"target": f"lt/{lt['id']}", "field": "ami_id", "before": lt["ami"], "after": new_ami,
+                        "reversible": True, "note": "only the AMI changes; undo by re-pointing to the previous version"})
+        changes.append({"target": f"lt/{lt['id']}", "field": "launch_template_version", "before": lt["version"],
+                        "after": lt["version"] + 1, "reversible": True})
+    if new_ami and asg["ami"] != new_ami:
+        changes.append({"target": f"asg/{asg['name']}", "field": "ami_id", "before": asg["ami"], "after": new_ami,
+                        "reversible": True})
+    for k in sorted(lt["pending"]):
         if k != "ami":
-            violations.append(f"launch template change {k!r} is not allowed: only the AMI may change")
-    lt_diff = {"changed": changed, "only_ami": set(changed) <= {"ami"}}
+            blockers.append(f"launch template change {k!r} is not allowed: only the AMI may change")
 
-    # blast radius by quorum math
-    members = len(c["etcd"]["members"])
+    # addons (rollout undo: reversible)
+    for short, key in ADDONS:
+        if snap["addons"][key]["version"] != target:
+            changes.append({"target": f"addon/{short}", "field": "addon_version",
+                            "before": snap["addons"][key]["version"], "after": target, "reversible": True,
+                            "note": "undo with kubectl rollout undo"})
+
+    # alignment: do the observed pointers agree with each other before we start?
+    node_amis = sorted({n["ami"] for n in snap["workers"]["nodes"]})
+    aligned_asg = asg["ami"] == lt["ami"] and node_amis == [lt["ami"]]
+    per_asg = [{"asg": asg["name"], "asg_ami": asg["ami"], "launch_template_ami": lt["ami"], "node_amis": node_amis,
+                "aligned": aligned_asg,
+                "explanation": ("asg, launch template and every node agree" if aligned_asg else
+                                f"asg={asg['ami']} lt={lt['ami']} nodes={node_amis}: drift, not a surprise")}]
+    if not aligned_asg:
+        warnings.append(f"{asg['name']}: AMI pointers disagree before the change ({per_asg[0]['explanation']})")
+    cp_aligned = not lagging and len({m['apiserver'] for m in snap['masters']}) == 1
+
+    # blast radius by quorum math, plus worker tiers
+    members = snap["etcd"]["count"]
     tolerated = model.quorum_tolerance(members)
-    batches = make_batches(c)
-    blast = {
-        "etcd_members": members, "tolerated_unavailable": tolerated, "serial": SERIAL,
-        "worst_case_masters_down": min(SERIAL, len(c["masters"])),
-        "within_quorum": SERIAL <= tolerated,
-        "worker_batch_percent": BATCH_PERCENT,
-        "worst_case_worker_batch": max((len(b) for b in batches), default=0),
-    }
-    if not blast["within_quorum"]:
-        violations.append(f"serial={SERIAL} exceeds quorum tolerance {tolerated} of {members} members")
+    tiers = worker_tiers(snap["workers"]["nodes"])
+    within = SERIAL <= tolerated
+    if not within:
+        blockers.append(f"serial={SERIAL} exceeds quorum tolerance {tolerated} of {members} members")
 
     # things the human should see before approving (they stop the apply, they do not fail the plan)
-    timeout = c["flags"].get("drain_timeout_s", 300)
-    for n in c["workers"]["nodes"]:
+    timeout = snap["flags"].get("drain_timeout_s", 300)
+    for n in snap["workers"]["nodes"]:
         if n["eviction_s"] > timeout:
             warnings.append(f"{n['name']}: eviction takes {n['eviction_s']}s > drain_timeout_s {timeout}s "
                             f"(needs a per-cluster flag, a human decision)")
-        for p in blocking_pdbs(c, n["name"]):
+        for p in blocking_pdbs(snap, n["name"]):
             warnings.append(f"{n['name']}: PDB {p['name']} allows 0 disruptions (drain will block; never forced)")
 
     return {
-        "cluster": c["name"], "stage": c["stage"], "cluster_type": c["cluster_type"],
-        "from": src, "to": target, "flags": dict(c["flags"]),
-        "control_plane": {"order_per_master": ["gate", "apiserver", "apiserver_ready", "controller_manager",
-                                               "scheduler", "kubelet", "verify"],
-                          "masters": [m["name"] for m in c["masters"]], "kubeadm_plan": steps},
-        "workers": {"ami_diff": ami_diff, "launch_template_diff": lt_diff, "batches": batches,
-                    "drain_timeout_s": timeout},
-        "addons": [{"name": a, "from": c["addons"][a]["version"], "to": target} for a in ADDON_ORDER],
-        "blast_radius": blast,
-        "violations": violations, "warnings": warnings,
+        "meta": {"cluster": snap["meta"]["cluster"], "computed_at": now(), "from_version": src, "to_version": target,
+                 "snapshot_ref": snapshot_ref},
+        "desired": {"target_version": target, "target_ami": new_ami},
+        "reversible": all(c["reversible"] for c in changes),
+        "changes": changes,
+        "alignment": {"aligned": aligned_asg and cp_aligned,
+                      "control_plane": {"aligned": cp_aligned, "lagging": lagging}, "per_asg": per_asg},
+        "blast_radius": {"etcd_members": members, "tolerated_unavailable": tolerated, "serial": SERIAL,
+                         "worst_case_masters_down": min(SERIAL, len(snap["masters"])), "within_quorum": within,
+                         "worker_tiers": tiers},
+        "verdict": {"safe_to_apply": not blockers, "blockers": blockers, "warnings": warnings},
     }
 
 
-def render(plan):
+def render(diff, snap):
     """Human-readable plan: what apply would do. Printed at the approval gate."""
-    b, w = plan["blast_radius"], plan["workers"]
+    b, m = diff["blast_radius"], diff["meta"]
     lines = [
-        f"PLAN {plan['cluster']} ({plan['stage']}, {plan['cluster_type']}): {plan['from']} -> {plan['to']}",
+        f"PLAN {m['cluster']} ({snap['meta']['stage']}, {snap['meta']['cluster_type']}): {m['from_version']} -> {m['to_version']}",
+        f"  desired vs observed: {len(diff['changes'])} change(s); diff is "
+        f"{'reversible' if diff['reversible'] else 'IRREVERSIBLE (control plane in place): needs the etcd snapshot'}",
         f"  blast radius: {b['etcd_members']} etcd members tolerate {b['tolerated_unavailable']}; "
         f"serial={b['serial']} => worst case {b['worst_case_masters_down']} master down "
         f"({'within' if b['within_quorum'] else 'EXCEEDS'} quorum)",
+        "  layers in order: master -> worker -> components (addons)",
         "  control plane, per master (each master needs its own sign-off):",
-        "    " + " -> ".join(plan["control_plane"]["order_per_master"]),
-        "    masters in order: " + ", ".join(plan["control_plane"]["masters"]),
-        f"  workers: AMI {w['ami_diff']['from']} -> {w['ami_diff']['to']} "
-        f"(kubelet {w['ami_diff']['target_kubelet']}); launch template changes: "
-        f"{', '.join(w['launch_template_diff']['changed']) or 'none'}",
-        f"    batches (stateful nodes first, alone): "
-        + " | ".join(",".join(x) for x in w["batches"]) + f"; drain timeout {w['drain_timeout_s']}s, never forced",
-        "  addons in order: " + " -> ".join(a["name"] for a in plan["addons"]),
+        "    apiserver -> apiserver_ready (/readyz + LB) -> controller_manager -> scheduler -> kubelet -> verify",
+        "    masters in order: " + ", ".join(x["name"] for x in snap["masters"]),
+        f"  workers: AMI {diff['alignment']['per_asg'][0]['asg_ami']} -> {diff['desired']['target_ami']}; "
+        f"launch template changes: only the AMI",
+        "    tiers (stateful nodes alone, never forced; drain timeout "
+        f"{snap['flags'].get('drain_timeout_s', 300)}s): "
+        + " | ".join(f"{t['phase']}: {','.join(t['nodes'])}" for t in b["worker_tiers"]),
+        "  addons in order: ccm -> cni -> cluster_autoscaler",
     ]
-    for v in plan["violations"]:
-        lines.append(f"  VIOLATION: {v}")
-    for x in plan["warnings"]:
+    for v in diff["verdict"]["blockers"]:
+        lines.append(f"  BLOCKER: {v}")
+    for x in diff["verdict"]["warnings"]:
         lines.append(f"  WARNING: {x}")
     return "\n".join(lines) + "\n"

@@ -40,3 +40,8 @@ class RunDir:
     def log(self, message, level="INFO"):
         with open(self.path / "execution.log", "a") as fh:
             fh.write(f"{now()} {level:<5} {message}\n")
+
+    def append_jsonl(self, name, obj):
+        """Append-only: one JSON object per line, never rewritten."""
+        with open(self.path / name, "a") as fh:
+            fh.write(json.dumps(obj, sort_keys=True) + "\n")

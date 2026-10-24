@@ -1198,7 +1198,7 @@ faults:
   cluster: prod-west
   kind: pdb_blocks_drain
   what: a stateful node's PDB allows zero disruptions
-  expect_stop: workers:batch1
+  expect_stop: workers:canary
 - id: F4
   cluster: prod-eu
   kind: slow_eviction

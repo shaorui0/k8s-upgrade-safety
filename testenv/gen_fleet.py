@@ -114,7 +114,7 @@ def build():
          "expect_stop": "addon:ccm"},
         {"id": "F3", "cluster": "prod-west", "kind": "pdb_blocks_drain",
          "what": "a stateful node's PDB allows zero disruptions",
-         "expect_stop": "workers:batch1"},
+         "expect_stop": "workers:canary"},
         {"id": "F4", "cluster": "prod-eu", "kind": "slow_eviction",
          "what": "a node evicts in 540 s but the cluster has no drain_timeout_s=600 flag",
          "expect_stop": "workers:batch"},

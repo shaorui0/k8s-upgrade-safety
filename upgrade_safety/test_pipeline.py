@@ -11,6 +11,17 @@ FLEET_PATH = Path(__file__).resolve().parent.parent / "testenv" / "fleet.yaml"
 FLEET = model.load_fleet(FLEET_PATH)
 
 
+def make_engine(runs, rid, cluster="dev-1", fleet=FLEET, **kw):
+    from upgrade_safety.engine import Engine
+    from upgrade_safety.evidence import RunDir
+    return Engine(fleet, RunDir(runs, rid), cluster=cluster, target="1.26", approve=kw.pop("approve", True), **kw)
+
+
+def run_def(eng, sid):
+    from upgrade_safety import reconcile
+    return reconcile.run_step(eng._ctx(), eng.defs[sid])
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -53,8 +64,8 @@ class CheckGateTest(Base):
         code, out, rd = self.run_cluster("check", "prod-east")
         self.assertEqual(code, 1)
         self.assertIn("etcd_raft_lag", out)
-        pre = json.loads((rd / "snapshots" / "pre.json").read_text())
-        failed = [r["id"] for r in pre["criteria"] if not r["ok"]]
+        crit = json.loads((rd / "criteria-baseline.json").read_text())
+        failed = [r["id"] for r in crit if not r["ok"]]
         self.assertEqual(failed, ["etcd_raft_lag"])
         self.assertEqual(self.status(rd, "snapshot"), "pending")      # no snapshot, no further step
         self.assertFalse((rd / "etcd-snapshot.json").exists())
@@ -78,7 +89,7 @@ class ApproveGateTest(Base):
         self.assertEqual(code, 2)
         self.assertIn("NOT APPROVED", out)
         self.assertIn("PLAN prod-canary", out)
-        self.assertTrue((rd / "plan.json").exists())
+        self.assertTrue((rd / "diff.json").exists())
         self.assertEqual(self.state(rd)["status"], "awaiting_approval")
         self.assertEqual(self.state(rd)["stopped_at"], "gate:plan")
         w = self.world(rd)
@@ -95,7 +106,7 @@ class ApproveGateTest(Base):
         signoffs = re.findall(r"SIGNOFF master (\S+) signed off", self.log(rd))
         self.assertEqual(signoffs, ["prod-canary-m1", "prod-canary-m2", "prod-canary-m3"])
         for m in signoffs:    # sign-off precedes that master's first mutation
-            self.assertLess(self.log(rd).index(f"SIGNOFF master {m}"), self.log(rd).index(f"START master:{m}:apiserver"))
+            self.assertLess(self.log(rd).index(f"SIGNOFF master {m}"), self.log(rd).index(f"DONE master:{m}:apiserver"))
 
     def test_approving_via_resume_continues_the_same_run(self):
         code, _, rd = self.run_cluster("apply", "prod-canary", run_id="gated")
@@ -148,16 +159,14 @@ class ApiserverGateTest(Base):
         self.assertEqual(w["masters"][0]["controller_manager"], "1.25")
 
     def test_next_component_refuses_if_gate_was_skipped(self):
-        from upgrade_safety.engine import Engine
-        from upgrade_safety.evidence import RunDir
-        rd = RunDir(self.runs, "direct")
-        eng = Engine(FLEET, rd, cluster="dev-1", target="1.26", approve=True)
-        m = eng._m("dev-1-m1")
+        eng = make_engine(self.runs, "direct")
+        self.assertEqual(run_def(eng, "snapshot")["outcome"], "applied_pass")      # backup precondition satisfied
+        m = eng.c["masters"][0]
         m["apiserver"], m["readyz"] = "1.26", False
-        outcome, detail = eng._master(m, "controller_manager")
-        self.assertEqual(outcome, "fail")
+        out = run_def(eng, "master:dev-1-m1:controller_manager")
+        self.assertEqual(out["outcome"], "stopped_precheck")
         self.assertEqual(m["controller_manager"], "1.25")
-        self.assertIn("apiserver gate", detail)
+        self.assertIn("apiserver gate", out["reason"])
 
     def test_leader_transfer_is_logged_as_expected(self):
         code, _, rd = self.run_cluster("run", "dev-1", "--approve")
@@ -166,30 +175,28 @@ class ApiserverGateTest(Base):
         self.assertIn("is expected", self.log(rd))
 
     def test_member_that_does_not_come_back_is_the_danger(self):
-        from upgrade_safety.engine import Engine
-        from upgrade_safety.evidence import RunDir
-        eng = Engine(FLEET, RunDir(self.runs, "dead"), cluster="dev-1", target="1.26", approve=True)
-        m = eng._m("dev-1-m2")
-        m["etcd_returns"] = False
-        eng._master(m, "apiserver")
-        for what in ("controller_manager", "scheduler", "kubelet"):
-            eng._master(m, what)
-        outcome, detail = eng._master(m, "verify")
-        self.assertEqual(outcome, "fail")
-        self.assertIn("did not come back", detail)
+        import yaml
+        d = json.loads(json.dumps(FLEET.data))
+        d["clusters"][0]["masters"][1]["etcd_returns"] = False
+        p = Path(self.runs) / "dead.yaml"
+        p.write_text(yaml.safe_dump(d))
+        code, out = self.cli("run", "--cluster", "dev-1", "--approve", "--run-id", "dead", fleet=p)
+        self.assertEqual(code, 1)
+        self.assertEqual(self.state(Path(self.runs) / "dead")["stopped_at"], "master:dev-1-m2:verify")
+        self.assertIn("real danger", out)
 
 
 class WorkerLayerTest(Base):
     def test_pdb_blocks_drain_and_nothing_is_forced(self):
         code, out, rd = self.run_cluster("run", "prod-west", "--approve")
         self.assertEqual(code, 1)
-        self.assertEqual(self.state(rd)["stopped_at"], "workers:batch1")
+        self.assertEqual(self.state(rd)["stopped_at"], "workers:canary")
         self.assertIn("PDB mysql-pdb", out)
-        self.assertIn("not forced", out)
+        self.assertIn("never forced", out)
         self.assertIn("lower minAvailable", self.state(rd)["reason"])
         w = self.world(rd)
         self.assertTrue(all(n["ami"] == "ami-synth-125" for n in w["workers"]["nodes"]))   # not one node replaced
-        self.assertEqual(self.status(rd, "workers:batch2"), "pending")
+        self.assertEqual(self.status(rd, "workers:batch1"), "pending")
 
     def test_slow_eviction_needs_the_600s_flag(self):
         code, out, rd = self.run_cluster("run", "prod-eu", "--approve")
@@ -213,32 +220,37 @@ class WorkerLayerTest(Base):
     def test_stateful_nodes_go_first_and_alone(self):
         code, _, rd = self.run_cluster("run", "prod-canary", "--approve")
         self.assertEqual(code, 0)
-        batches = self.state(rd)["batches"]
+        tiers = self.state(rd)["tiers"]
         w = {n["name"]: n for n in self.world(rd)["workers"]["nodes"]}
-        db_nodes = [n for n, x in w.items() if x["db"]]
-        self.assertEqual([b for b in batches[:len(db_nodes)]], [[n] for n in sorted(db_nodes)])
+        db_nodes = sorted(n for n, x in w.items() if x["db"])
+        self.assertEqual([t["nodes"] for t in tiers[:len(db_nodes)]], [[n] for n in db_nodes])
         self.assertIn("VERIFY service kafka", self.log(rd))
 
+    def test_canary_runs_before_any_batch_and_is_one_node(self):
+        code, _, rd = self.run_cluster("run", "prod-canary", "--approve")
+        ids = [s["id"] for s in self.state(rd)["steps"]]
+        self.assertLess(ids.index("workers:canary"), ids.index("workers:batch1"))
+        defs = {d["id"]: d for d in json.loads((rd / "steps.json").read_text())}
+        self.assertEqual(len(defs["workers:canary"]["blast_radius"]["nodes"]), 1)
+        self.assertEqual(defs["workers:canary"]["blast_radius"]["phase"], "canary")
+        self.assertLess(self.log(rd).index("DONE workers:canary"), self.log(rd).index("START workers:batch1"))
+
     def test_workers_never_lead_the_control_plane(self):
-        from upgrade_safety.engine import Engine
-        from upgrade_safety.evidence import RunDir
-        eng = Engine(FLEET, RunDir(self.runs, "lead"), cluster="dev-1", target="1.26", approve=True)
-        outcome, detail = eng._launch_template()
-        self.assertEqual(outcome, "fail")
-        self.assertIn("never lead", detail)
+        eng = make_engine(self.runs, "lead")
+        out = run_def(eng, "workers:launch_template")
+        self.assertEqual(out["outcome"], "stopped_precheck")
+        self.assertIn("never lead", out["reason"])
 
     def test_new_node_stuck_when_ccm_unhealthy_now(self):
-        from upgrade_safety.engine import Engine
-        from upgrade_safety.evidence import RunDir
-        eng = Engine(FLEET, RunDir(self.runs, "stuck"), cluster="dev-1", target="1.26", approve=True)
+        eng = make_engine(self.runs, "stuck")
         for m in eng.c["masters"]:
             for k in ("apiserver", "controller_manager", "scheduler", "kubelet"):
                 m[k] = "1.26"
-        eng._launch_template()
+        self.assertEqual(run_def(eng, "workers:launch_template")["outcome"], "applied_pass")
         eng.c["addons"]["ccm"]["healthy"] = False
-        outcome, detail = eng._batch(1)
-        self.assertEqual(outcome, "fail")
-        self.assertIn("uninitialized taint", detail)
+        out = run_def(eng, "workers:canary")
+        self.assertEqual(out["outcome"], "stopped_postcheck")
+        self.assertIn("uninitialized taint", out["reason"])
 
 
 class AddonLayerTest(Base):
@@ -254,12 +266,10 @@ class AddonLayerTest(Base):
         self.assertEqual(self.status(rd, "workers:verify"), "completed")      # earlier layers did finish
 
     def test_addon_order_is_enforced(self):
-        from upgrade_safety.engine import Engine
-        from upgrade_safety.evidence import RunDir
-        eng = Engine(FLEET, RunDir(self.runs, "order"), cluster="dev-1", target="1.26", approve=True)
-        outcome, detail = eng._addon("cni")
-        self.assertEqual(outcome, "fail")
-        self.assertIn("requires ccm", detail)
+        eng = make_engine(self.runs, "order")
+        out = run_def(eng, "addon:cni")
+        self.assertEqual(out["outcome"], "stopped_precheck")
+        self.assertIn("requires ccm", out["reason"])
         self.assertEqual(eng.c["addons"]["cni"]["version"], "1.25")
 
 
@@ -278,7 +288,7 @@ class VerifyTest(Base):
     def test_verify_diffs_against_the_baseline_file(self):
         code, _, rd = self.run_cluster("run", "prod-canary", "--approve")
         self.assertEqual(code, 0)
-        d = json.loads((rd / "diff.json").read_text())
+        d = json.loads((rd / "verify.json").read_text())
         self.assertEqual(d["quadrant"]["decision"], "proceed")
         self.assertEqual(d["version_state"], "target")
         self.assertIn("prod-canary-m1.apiserver: 1.25 -> 1.26", d["diff"]["changed"])
@@ -310,7 +320,7 @@ class VerifyTest(Base):
         (rd / "cluster.json").write_text(json.dumps(w))
         code, _ = self.cli("verify", "--cluster", "dev-1", "--resume", rd.name)
         self.assertEqual(code, 1)
-        d = json.loads((rd / "diff.json").read_text())
+        d = json.loads((rd / "verify.json").read_text())
         self.assertEqual(d["failed_criteria"], [])
         self.assertEqual(d["diff"]["regressions"], ["Running pods 60 -> 50"])
         self.assertEqual(d["quadrant"]["decision"], "human")
@@ -348,14 +358,14 @@ class RollbackAdviceTest(Base):
     def test_triggers_pods_services_alert_flood(self):
         snap = {"workload": {"running_ratio": 0.4, "unreachable": ["edge-gateway"]}, "alerts": [f"A{i}" for i in range(5)]}
         base = {"alerts": []}
-        self.assertEqual(verify.rollback_triggers(snap, base, "workers"),
+        self.assertEqual(verify.rollback_triggers(snap, base, "worker"),
                          ["pods_not_running_over_50pct", "critical_service_unreachable", "alert_flood"])
         ok = {"workload": {"running_ratio": 0.5, "unreachable": []}, "alerts": ["A1"]}
-        self.assertEqual(verify.rollback_triggers(ok, base, "addons"), [])
+        self.assertEqual(verify.rollback_triggers(ok, base, "components"), [])
 
     def test_layer_actions(self):
-        self.assertIn("rollout undo", " ".join(verify.ROLLBACK_ACTIONS["addons"]))
-        self.assertIn("Launch Template", " ".join(verify.ROLLBACK_ACTIONS["workers"]))
+        self.assertIn("rollout undo", " ".join(verify.ROLLBACK_ACTIONS["components"]))
+        self.assertIn("Launch Template", " ".join(verify.ROLLBACK_ACTIONS["worker"]))
 
 
 class ResumeTest(Base):
@@ -384,15 +394,16 @@ class ResumeTest(Base):
         self.assertEqual(self.log(rd).count("START workers:batch1\n"), 1)
         self.assertEqual(self.log(rd).count("START addon:ccm\n"), 2)        # failed step is retried, not skipped
 
-    def test_mutating_steps_are_idempotent(self):
-        from upgrade_safety.engine import Engine
-        from upgrade_safety.evidence import RunDir
-        eng = Engine(FLEET, RunDir(self.runs, "idem"), cluster="dev-1", target="1.26", approve=True)
-        m = eng._m("dev-1-m1")
-        first = eng._master(m, "apiserver")
-        second = eng._master(m, "apiserver")
-        self.assertEqual(first[0], "ok")
-        self.assertEqual(second, ("ok", "already at target (idempotent no-op)"))
+    def test_mutating_steps_are_idempotent_and_skip_the_executor(self):
+        eng = make_engine(self.runs, "idem")
+        self.assertEqual(run_def(eng, "snapshot")["outcome"], "applied_pass")
+        calls = []
+        real = eng.ex.execute
+        eng.ex.execute = lambda step: calls.append(step["id"]) or real(step)
+        self.assertEqual(run_def(eng, "master:dev-1-m1:apiserver")["outcome"], "applied_pass")
+        again = run_def(eng, "master:dev-1-m1:apiserver")
+        self.assertEqual(again["outcome"], "converged_skipped")
+        self.assertEqual(calls, ["master:dev-1-m1:apiserver"])       # the second run never reached the executor
 
     def test_existing_run_id_is_not_overwritten(self):
         self.run_cluster("check", "dev-1", run_id="same")
@@ -405,8 +416,9 @@ class EvidenceTest(Base):
     def test_complete_run_leaves_all_evidence(self):
         code, _, rd = self.run_cluster("run", "prod-canary", "--approve")
         self.assertEqual(code, 0)
-        for f in ("snapshots/pre.json", "snapshots/post.json", "plan.json", "plan.txt", "execution.log",
-                  "state.json", "cluster.json", "diff.json", "etcd-snapshot.json", "report.html"):
+        for f in ("snapshots/baseline.json", "snapshots/final.json", "diff.json", "plan.txt", "execution.log",
+                  "state.json", "cluster.json", "verify.json", "etcd-snapshot.json", "report.html", "steps.json",
+                  "evidence.jsonl", "criteria-baseline.json", "criteria-final.json"):
             self.assertTrue((rd / f).exists(), f)
         self.assertFalse((rd / "rollback.json").exists())
         self.assertTrue(all(s["status"] == "completed" for s in self.state(rd)["steps"]))

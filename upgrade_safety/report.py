@@ -1,4 +1,5 @@
 """report.html for a run: everything a reviewer needs on one page, all data escaped."""
+import json
 from html import escape as e
 
 CSS = """
@@ -43,8 +44,8 @@ def render(rd):
         if acts:
             parts.append("<ul>" + "".join(f"<li>{e(a)}</li>" for a in acts) + "</ul>")
 
-    if rd.exists("diff.json"):
-        d = rd.read_json("diff.json")
+    if rd.exists("verify.json"):
+        d = rd.read_json("verify.json")
         q = d["quadrant"]
         parts.append("<h2>Verify: version x health</h2>")
         parts.append(f"<table><tr><th></th><th>healthy</th><th>unhealthy</th></tr>"
@@ -58,9 +59,9 @@ def render(rd):
         if d["diff"]["regressions"]:
             parts.append("<p class='bad'>regressions:</p><ul>" + "".join(f"<li>{e(x)}</li>" for x in d["diff"]["regressions"]) + "</ul>")
 
-    for title, name in (("Check criteria: baseline (before)", "snapshots/pre.json"), ("Check criteria: after", "snapshots/post.json")):
+    for title, name in (("Check criteria: baseline (before)", "criteria-baseline.json"), ("Check criteria: after", "criteria-final.json")):
         if rd.exists(name):
-            crit = rd.read_json(name)["criteria"]
+            crit = rd.read_json(name)
             parts.append(f"<h2>{title}</h2><table><tr><th>criterion</th><th>result</th><th>detail</th></tr>")
             for r in crit:
                 parts.append(f"<tr><td><code>{e(r['id'])}</code></td><td class='{_cls(r['ok'])}'>{'pass' if r['ok'] else 'FAIL'}</td><td>{e(r['detail'])}</td></tr>")
@@ -74,6 +75,18 @@ def render(rd):
         parts.append(f"<tr><td><code>{e(s['id'])}</code></td><td>{e(str(s['layer'] or ''))}</td>"
                      f"<td class='{STATUS_CLASS.get(s['status'], '')}'>{e(s['status'])}</td><td>{e(s['detail'])}</td></tr>")
     parts.append("</table>")
+    if rd.exists("evidence.jsonl"):
+        parts.append("<h2>Evidence records (append-only)</h2><table><tr><th>step</th><th>outcome</th><th>gate</th>"
+                     "<th>executed</th><th>assertions failed</th></tr>")
+        for line in rd.read_text("evidence.jsonl").splitlines():
+            ev = json.loads(line)
+            failed = [a["id"] for a in ev["assertions"] if not a["passed"]]
+            g = ev["gate_decision"]
+            cls = "ok" if ev["outcome"] in ("applied_pass", "converged_skipped") else "bad"
+            parts.append(f"<tr><td><code>{e(ev['step_id'])}</code></td><td class='{cls}'>{e(ev['outcome'])}</td>"
+                         f"<td>{e(g['policy'])}: {e(g['decision'])} by {e(g['decided_by'])}</td>"
+                         f"<td>{e(ev.get('execute', {}).get('command', ''))}</td><td>{e(', '.join(failed))}</td></tr>")
+        parts.append("</table>")
     parts.append(f"<h2>Execution log</h2><pre>{e(rd.read_text('execution.log'))}</pre>")
     parts.append("</body></html>")
     return "".join(parts)
