@@ -1,10 +1,10 @@
 ## 1. Fleet
-- [ ] 1.1 `testenv/gen_fleet.py` and generated `testenv/fleet.yaml` (9 clusters, 5 faults, ground truth)
+- [x] 1.1 `testenv/gen_fleet.py` and generated `testenv/fleet.yaml` (9 clusters, 5 faults, ground truth)
 - [ ] 1.2 `testenv/README.md`
 
 ## 2. Model
-- [ ] 2.1 `upgrade_safety/model.py` (load, validate, skew, quorum, ordering, target AMI)
-- [ ] 2.2 `upgrade_safety/test_model.py`
+- [x] 2.1 `upgrade_safety/model.py` (load, validate, skew, quorum, ordering, target AMI)
+- [x] 2.2 `upgrade_safety/test_model.py`
 
 ## 3. Acceptance
 - [ ] 3.1 `python3 -m unittest discover -v` green
