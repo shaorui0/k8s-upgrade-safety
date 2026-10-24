@@ -52,8 +52,8 @@ def run_step(ctx, step):
     # idempotent re-entry: already converged, nothing to do
     if "already_done" in step:
         r = probes.evaluate(step["already_done"], baseline, baseline, "already_done")
-        _record(ev, r)
         if r["passed"]:
+            _record(ev, r)           # "not done yet" is the normal case and is not evidence of anything
             _finish(ctx, ev, "converged_skipped", "continue", "already converged (idempotent re-entry)",
                     ev["baseline_snapshot"])
             return {"outcome": "converged_skipped", "reason": "already converged", "awaiting": False, "evidence": ev}

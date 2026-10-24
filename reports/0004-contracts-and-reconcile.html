@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>0004-contracts-and-reconcile</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">0004-contracts-and-reconcile</h1>
+</header>
+<h1 id="c0004-contracts-and-reconcile">c0004 contracts and
+reconcile</h1>
+<p><strong>What changed.</strong> Four JSON contracts (snapshot, diff,
+step, evidence) with a standard-library validator. <code>plan</code>
+writes a formal diff artifact with per-change reversibility, pointer
+alignment and a machine-readable verdict. <code>apply</code> is a
+per-step reconcile loop: reversibility guard, baseline,
+<code>already_done</code> skip, prechecks, sign-off, one executor call,
+postcheck against the baseline, gate, one append-only evidence record.
+Steps and assertions are data; probes answer questions about snapshots.
+The engine acts only through an <code>Executor</code> interface;
+<code>SimulatedExecutor</code> is the only implementation and Terraform,
+Ansible and AWS adapters are named slots that refuse. Irreversible steps
+are refused without a fresh etcd snapshot. Worker replacement is tiered:
+canary of one node, then batches of at most 20%.</p>
+<p><strong>Why.</strong> My 2026 design notes describe the system as a
+level-triggered reconcile with contracts between layers, declared
+reversibility and a plane split. c0003 had the gates but not that
+structure; this makes the structure real and testable.</p>
+<p><strong>Verdict.</strong> 125 tests green; every snapshot, diff, step
+and evidence record of a full run validates against its contract; an
+irreversible step without a snapshot never reaches the executor; 19/19
+gate mutations killed; scan OK, 0 private-pattern hits,
+<code>openspec validate</code> passes.</p>
+<h1 id="acceptance-evidence-verbatim">Acceptance evidence
+(verbatim)</h1>
+<h2 id="all-tests-verbose-tail-tools-tests-mutation-check">4.1 all tests
+(verbose, tail), tools tests, mutation check</h2>
+<pre><code>$ python3 -m unittest discover -v 2&gt;&amp;1 | tail -40; python3 -m unittest discover -s tools 2&gt;&amp;1 | tail -3; python3 tools/mutation_check.py
+Criteria all pass, but fewer pods Running than the baseline: only the baseline diff can see it. ... ok
+test_monitor_disagreement_blocks_proceed (upgrade_safety.test_pipeline.VerifyTest.test_monitor_disagreement_blocks_proceed) ... ok
+test_new_alert_after_upgrade_is_a_regression_and_human (upgrade_safety.test_pipeline.VerifyTest.test_new_alert_after_upgrade_is_a_regression_and_human) ... ok
+test_old_version_healthy_is_rerun (upgrade_safety.test_pipeline.VerifyTest.test_old_version_healthy_is_rerun) ... ok
+test_verify_diffs_against_the_baseline_file (upgrade_safety.test_pipeline.VerifyTest.test_verify_diffs_against_the_baseline_file) ... ok
+test_verify_refuses_an_incomplete_apply (upgrade_safety.test_pipeline.VerifyTest.test_verify_refuses_an_incomplete_apply) ... ok
+test_canary_runs_before_any_batch_and_is_one_node (upgrade_safety.test_pipeline.WorkerLayerTest.test_canary_runs_before_any_batch_and_is_one_node) ... ok
+test_flagged_preprod_passes (upgrade_safety.test_pipeline.WorkerLayerTest.test_flagged_preprod_passes) ... ok
+test_new_node_stuck_when_ccm_unhealthy_now (upgrade_safety.test_pipeline.WorkerLayerTest.test_new_node_stuck_when_ccm_unhealthy_now) ... ok
+test_pdb_blocks_drain_and_nothing_is_forced (upgrade_safety.test_pipeline.WorkerLayerTest.test_pdb_blocks_drain_and_nothing_is_forced) ... ok
+test_slow_eviction_needs_the_600s_flag (upgrade_safety.test_pipeline.WorkerLayerTest.test_slow_eviction_needs_the_600s_flag) ... ok
+test_stateful_nodes_go_first_and_alone (upgrade_safety.test_pipeline.WorkerLayerTest.test_stateful_nodes_go_first_and_alone) ... ok
+test_workers_never_lead_the_control_plane (upgrade_safety.test_pipeline.WorkerLayerTest.test_workers_never_lead_the_control_plane) ... ok
+test_complete_run_artifacts_conform (upgrade_safety.test_reconcile.ContractsOnRunsTest.test_complete_run_artifacts_conform) ... ok
+test_converged_skip_is_recorded_on_resume_of_a_failed_step (upgrade_safety.test_reconcile.ContractsOnRunsTest.test_converged_skip_is_recorded_on_resume_of_a_failed_step) ... ok
+test_doctored_artifact_is_caught (upgrade_safety.test_reconcile.ContractsOnRunsTest.test_doctored_artifact_is_caught) ... ok
+test_evidence_is_append_only_across_resume (upgrade_safety.test_reconcile.ContractsOnRunsTest.test_evidence_is_append_only_across_resume) ... ok
+test_evidence_outcomes_for_each_kind_of_stop (upgrade_safety.test_reconcile.ContractsOnRunsTest.test_evidence_outcomes_for_each_kind_of_stop) ... ok
+test_failed_and_awaiting_runs_conform_too (upgrade_safety.test_reconcile.ContractsOnRunsTest.test_failed_and_awaiting_runs_conform_too) ... ok
+test_snapshot_role_enum_rejects_other_roles (upgrade_safety.test_reconcile.ContractsOnRunsTest.test_snapshot_role_enum_rejects_other_roles) ... ok
+test_cli_reports_missing_adapter (upgrade_safety.test_reconcile.ExecutorSeamTest.test_cli_reports_missing_adapter) ... ok
+test_engine_acts_only_through_the_executor (upgrade_safety.test_reconcile.ExecutorSeamTest.test_engine_acts_only_through_the_executor) ... ok
+test_unimplemented_adapters_refuse_loudly (upgrade_safety.test_reconcile.ExecutorSeamTest.test_unimplemented_adapters_refuse_loudly) ... ok
+test_baseline_relative_probe_ignores_pre_existing_breakage (upgrade_safety.test_reconcile.ProbeTest.test_baseline_relative_probe_ignores_pre_existing_breakage) ... ok
+test_target_tokens_resolve_from_the_snapshot (upgrade_safety.test_reconcile.ProbeTest.test_target_tokens_resolve_from_the_snapshot) ... ok
+test_unknown_probe_is_an_error_not_a_pass (upgrade_safety.test_reconcile.ProbeTest.test_unknown_probe_is_an_error_not_a_pass) ... ok
+test_a_stale_snapshot_does_not_count (upgrade_safety.test_reconcile.ReversibilityTest.test_a_stale_snapshot_does_not_count) ... ok
+test_every_step_declares_reversibility_and_irreversible_ones_name_a_backup (upgrade_safety.test_reconcile.ReversibilityTest.test_every_step_declares_reversibility_and_irreversible_ones_name_a_backup) ... ok
+test_irreversible_step_without_backup_is_refused_and_executor_not_called (upgrade_safety.test_reconcile.ReversibilityTest.test_irreversible_step_without_backup_is_refused_and_executor_not_called) ... ok
+test_snapshot_is_one_instance_of_the_rule_not_a_special_case (upgrade_safety.test_reconcile.ReversibilityTest.test_snapshot_is_one_instance_of_the_rule_not_a_special_case) ... ok
+test_with_a_fresh_snapshot_the_same_step_runs (upgrade_safety.test_reconcile.ReversibilityTest.test_with_a_fresh_snapshot_the_same_step_runs) ... ok
+test_signed_step_executes (upgrade_safety.test_reconcile.SignoffTest.test_signed_step_executes) ... ok
+test_step_waits_for_a_signature_and_does_not_execute (upgrade_safety.test_reconcile.SignoffTest.test_step_waits_for_a_signature_and_does_not_execute) ... ok
+test_built_steps_validate (upgrade_safety.test_reconcile.StepSchemaTest.test_built_steps_validate) ... ok
+test_ten_stateless_workers_canary_then_batches_of_two (upgrade_safety.test_reconcile.TierTest.test_ten_stateless_workers_canary_then_batches_of_two) ... ok
+
+----------------------------------------------------------------------
+Ran 125 tests in 6.245s
+
+OK
+
+OK
+FAIL leak pattern in x.md:1
+killed   raft lag limit 1000 -&gt; 3000
+killed   apiserver /readyz probe always true
+killed   apiserver LB-membership probe always true
+killed   next-component guard always passes
+killed   step sign-off ignored
+killed   plan sign-off ignored
+killed   completed steps re-executed on resume
+killed   PDB zero-disruption not a blocker
+killed   drain timeout ignored
+killed   addon order not enforced
+killed   CCM rollout health ignored
+killed   irreversible step runs without backup
+killed   already_done skip disabled
+killed   canary widened to the whole first batch
+killed   quadrant: unhealthy still proceeds
+killed   baseline regressions ignored
+killed   serial may exceed quorum
+killed   contract enum not enforced
+killed   contract required not enforced
+
+19/19 mutations killed
+exit=0</code></pre>
+<h2
+id="dod-run-on-prod-canary-then-every-artifact-validated-against-the-four-contracts">4.2
+DoD run on prod-canary, then every artifact validated against the four
+contracts</h2>
+<pre><code>$ python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-canary --target 1.26 --approve --run-id acc-canary | head -3; ls runs/acc-canary; python3 - &lt;&lt;&#39;PY&#39;
+import json, pathlib
+from upgrade_safety import contracts
+rd = pathlib.Path(&#39;runs/acc-canary&#39;)
+snaps = list((rd/&#39;snapshots&#39;).rglob(&#39;*.json&#39;))
+for f in snaps: contracts.validate(&#39;snapshot&#39;, json.loads(f.read_text()))
+contracts.validate(&#39;diff&#39;, json.loads((rd/&#39;diff.json&#39;).read_text()))
+steps = json.loads((rd/&#39;steps.json&#39;).read_text())
+for s in steps: contracts.validate(&#39;step&#39;, s)
+ev = contracts.validate_jsonl(&#39;evidence&#39;, (rd/&#39;evidence.jsonl&#39;).read_text())
+print(&#39;snapshots valid:&#39;, len(snaps), &#39;| steps valid:&#39;, len(steps), &#39;| evidence records valid:&#39;, len(ev))
+print(&#39;roles:&#39;, sorted({json.loads(f.read_text())[&#39;meta&#39;][&#39;role&#39;] for f in snaps}))
+print(&#39;outcomes:&#39;, sorted({e[&#39;outcome&#39;] for e in ev}))
+d = json.loads((rd/&#39;diff.json&#39;).read_text())
+print(&#39;diff.reversible:&#39;, d[&#39;reversible&#39;], &#39;| changes:&#39;, len(d[&#39;changes&#39;]), &#39;| verdict:&#39;, d[&#39;verdict&#39;][&#39;safe_to_apply&#39;])
+print(&#39;worker tiers:&#39;, [(t[&#39;phase&#39;], len(t[&#39;nodes&#39;])) for t in d[&#39;blast_radius&#39;][&#39;worker_tiers&#39;]])
+print(&#39;irreversible steps:&#39;, sorted({s[&#39;id&#39;].split(&#39;:&#39;)[-1] for s in steps if not s[&#39;reversible&#39;]}), &#39;backup:&#39;, {s[&#39;backup_precondition&#39;] for s in steps if not s[&#39;reversible&#39;]})
+PY
+[prod-canary] run: COMPLETE  run=acc-canary  steps 33/33 completed
+PLAN prod-canary (prod-canary, workload): 1.25 -&gt; 1.26
+  desired vs observed: 18 change(s); diff is IRREVERSIBLE (control plane in place): needs the etcd snapshot
+cluster.json
+criteria-baseline.json
+criteria-final.json
+diff.json
+etcd-snapshot.json
+evidence.jsonl
+execution.log
+plan.txt
+report.html
+snapshots
+state.json
+steps.json
+verify.json
+snapshots valid: 60 | steps valid: 29 | evidence records valid: 33
+roles: [&#39;baseline&#39;, &#39;postcheck&#39;]
+outcomes: [&#39;applied_pass&#39;]
+diff.reversible: False | changes: 18 | verdict: True
+worker tiers: [(&#39;canary&#39;, 1), (&#39;batch&#39;, 1), (&#39;rollout&#39;, 1), (&#39;rollout&#39;, 1), (&#39;rollout&#39;, 1)]
+irreversible steps: [&#39;apiserver&#39;, &#39;controller_manager&#39;, &#39;kubelet&#39;, &#39;scheduler&#39;] backup: {&#39;etcd-snapshot-fresh&#39;}
+exit=0</code></pre>
+<h2
+id="irreversible-step-refused-without-a-snapshot-executor-never-called">irreversible
+step refused without a snapshot; executor never called</h2>
+<pre><code>$ python3 -m unittest -v upgrade_safety.test_reconcile.ReversibilityTest 2&gt;&amp;1 | tail -12
+test_a_stale_snapshot_does_not_count (upgrade_safety.test_reconcile.ReversibilityTest.test_a_stale_snapshot_does_not_count) ... ok
+test_every_step_declares_reversibility_and_irreversible_ones_name_a_backup (upgrade_safety.test_reconcile.ReversibilityTest.test_every_step_declares_reversibility_and_irreversible_ones_name_a_backup) ... ok
+test_irreversible_step_without_backup_is_refused_and_executor_not_called (upgrade_safety.test_reconcile.ReversibilityTest.test_irreversible_step_without_backup_is_refused_and_executor_not_called) ... ok
+test_snapshot_is_one_instance_of_the_rule_not_a_special_case (upgrade_safety.test_reconcile.ReversibilityTest.test_snapshot_is_one_instance_of_the_rule_not_a_special_case) ... ok
+test_with_a_fresh_snapshot_the_same_step_runs (upgrade_safety.test_reconcile.ReversibilityTest.test_with_a_fresh_snapshot_the_same_step_runs) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.025s
+
+OK
+exit=0</code></pre>
+<h2
+id="evidence-outcome-for-each-kind-of-stop-last-record-per-run">evidence
+outcome for each kind of stop (last record per run)</h2>
+<pre><code>$ for c in prod-east prod-north prod-west; do python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster $c --approve --run-id acc-$c &gt; /dev/null; python3 -c &quot;import json; r=[json.loads(l) for l in open(&#39;runs/acc-$c/evidence.jsonl&#39;)][-1]; print(&#39;%-11s %-40s %-18s failed=%s&#39; % (&#39;$c&#39;, r[&#39;step_id&#39;], r[&#39;outcome&#39;], [a[&#39;id&#39;] for a in r[&#39;assertions&#39;] if not a[&#39;passed&#39;]]))&quot;; done; python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --run-id acc-gate &gt; /dev/null; python3 -c &quot;import json; r=[json.loads(l) for l in open(&#39;runs/acc-gate/evidence.jsonl&#39;)][-1]; print(&#39;dev-1 (no --approve)&#39;, r[&#39;step_id&#39;], r[&#39;outcome&#39;], r[&#39;gate_decision&#39;][&#39;decision&#39;])&quot;
+prod-east   check                                    stopped_precheck   failed=[&#39;etcd_raft_lag&#39;]
+prod-north  master:prod-north-m2:apiserver_ready     halted_by_operator failed=[&#39;readyz&#39;, &#39;lb-member&#39;]
+prod-west   workers:canary                           stopped_precheck   failed=[&#39;no-pdb-block&#39;]
+dev-1 (no --approve) gate:plan halted_by_operator stop
+exit=0</code></pre>
+<h2 id="executor-seam-real-adapters-refuse">executor seam: real adapters
+refuse</h2>
+<pre><code>$ python3 -m upgrade_safety check --fleet testenv/fleet.yaml --cluster dev-1 --executor terraform --run-id acc-tf; echo cli-exit=$?
+error: no terraform adapter: this repository ships only the simulated executor; a real adapter implements Executor.observe and Executor.execute
+cli-exit=2
+exit=0</code></pre>
+<h2 id="scan-independent-grep-openspec">4.3 scan, independent grep,
+openspec</h2>
+<pre><code>$ python3 tools/check_rules.py; grep -rniE -f .leak_patterns.local --exclude-dir=.git --exclude=.leak_patterns.local --exclude-dir=runs . | wc -l; openspec validate c0004-contracts-and-reconcile
+check_rules: OK
+      24
+Change &#39;c0004-contracts-and-reconcile&#39; is valid
+exit=0</code></pre>
+</body>
+</html>

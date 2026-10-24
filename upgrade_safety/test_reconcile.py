@@ -38,7 +38,7 @@ class ReversibilityTest(TmpBase):
         self.assertEqual(eng.c["masters"][0]["apiserver"], "1.25")
         ev = out["evidence"]
         self.assertEqual(ev["gate_decision"]["decision"], "stop")
-        self.assertEqual([a["phase"] for a in ev["assertions"]], ["already_done", "backup"])
+        self.assertEqual([a["phase"] for a in ev["assertions"]], ["backup"])
 
     def test_with_a_fresh_snapshot_the_same_step_runs(self):
         eng = make_engine(self.runs, "backup")
@@ -71,6 +71,21 @@ class ReversibilityTest(TmpBase):
         eng = make_engine(self.runs, "inst")
         self.assertTrue(eng.defs["snapshot"]["reversible"])
         self.assertEqual(eng.defs["master:dev-1-m1:apiserver"]["backup_precondition"], "etcd-snapshot-fresh")
+
+
+class SignoffTest(TmpBase):
+    def test_step_waits_for_a_signature_and_does_not_execute(self):
+        eng = make_engine(self.runs, "unsigned", approve=False)
+        run_def(eng, "snapshot")                                   # no sign-off needed for the backup
+        out = run_def(eng, "master:dev-1-m1:apiserver")
+        self.assertEqual((out["outcome"], out["awaiting"]), ("halted_by_operator", True))
+        self.assertEqual(eng.c["masters"][0]["apiserver"], "1.25")
+        self.assertEqual(out["evidence"]["gate_decision"]["decision"], "stop")
+
+    def test_signed_step_executes(self):
+        eng = make_engine(self.runs, "signed", approve=True)
+        run_def(eng, "snapshot")
+        self.assertEqual(run_def(eng, "master:dev-1-m1:apiserver")["outcome"], "applied_pass")
 
 
 class ExecutorSeamTest(TmpBase):
