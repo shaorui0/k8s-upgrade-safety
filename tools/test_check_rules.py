@@ -34,8 +34,9 @@ class CheckRulesTest(unittest.TestCase):
 
     def test_public_patterns(self):
         with tempfile.TemporaryDirectory() as d:
-            make_tree(Path(d), {"a.md": "acct 123456789012\n", "b.md": "AKIAABCDEFGHIJKLMNOP\n",
-                                "c.md": "/Users/someone/x\n", "d.md": "000000000000 placeholder\n"})
+            # built by concatenation so this file does not trip the scan itself
+            make_tree(Path(d), {"a.md": "acct " + "123456" + "789012\n", "b.md": "AK" + "IAABCDEFGHIJKLMNOP\n",
+                                "c.md": "/Us" + "ers/someone/x\n", "d.md": "000000000000 placeholder\n"})
             errs = sorted(check_rules.check(Path(d)))
             self.assertEqual(errs, ["leak pattern in a.md:1", "leak pattern in b.md:1", "leak pattern in c.md:1"])
 
