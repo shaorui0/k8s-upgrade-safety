@@ -94,7 +94,7 @@ def build():
     west["pdbs"][0]["current_healthy"] = 3
 
     south = cluster("prod-south", "prod", "workload", workers=5, db_nodes={1: "kafka"})
-    south["addons"]["ccm"]["target_rollout_healthy"] = False    # F2: new CCM does not roll out
+    south["addons"]["ccm"]["healthy_after_control_plane"] = False   # F2: healthy at check, broken by the new apiserver
 
     eu = cluster("prod-eu", "prod", "workload", workers=5, db_nodes={1: "mysql"})
     eu["workers"]["nodes"][2]["eviction_s"] = 540               # F4: slow, no 600 s flag
@@ -110,8 +110,9 @@ def build():
          "what": "one etcd follower is 2000 entries behind the leader",
          "expect_stop": "check", "criterion": "etcd_raft_lag"},
         {"id": "F2", "cluster": "prod-south", "kind": "ccm_unhealthy",
-         "what": "the target cloud-controller-manager rollout is unhealthy (would strand new workers on the uninitialized taint)",
-         "expect_stop": "addon:ccm"},
+         "what": "the old cloud-controller-manager is healthy at check time but unhealthy once the new control plane is up "
+                 "(new workers would be stranded on the uninitialized taint)",
+         "expect_stop": "workers:launch_template"},
         {"id": "F3", "cluster": "prod-west", "kind": "pdb_blocks_drain",
          "what": "a stateful node's PDB allows zero disruptions",
          "expect_stop": "workers:canary"},

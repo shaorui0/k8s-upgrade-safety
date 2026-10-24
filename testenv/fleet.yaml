@@ -765,7 +765,8 @@ clusters:
     ccm:
       version: '1.25'
       healthy: true
-      target_rollout_healthy: false
+      target_rollout_healthy: true
+      healthy_after_control_plane: false
     cni:
       version: '1.25'
       healthy: true
@@ -1191,9 +1192,9 @@ faults:
 - id: F2
   cluster: prod-south
   kind: ccm_unhealthy
-  what: the target cloud-controller-manager rollout is unhealthy (would strand new workers on the uninitialized
-    taint)
-  expect_stop: addon:ccm
+  what: the old cloud-controller-manager is healthy at check time but unhealthy once the new control plane
+    is up (new workers would be stranded on the uninitialized taint)
+  expect_stop: workers:launch_template
 - id: F3
   cluster: prod-west
   kind: pdb_blocks_drain

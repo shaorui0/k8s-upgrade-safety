@@ -89,7 +89,9 @@ class Engine:
 
     # ---- driver ------------------------------------------------------
     def run(self, until="run"):
-        last = SCOPES.get(until) or [s["id"] for s in self.state["steps"] if s["id"] != "verify"][-1]
+        last = SCOPES[until] if until in SCOPES else until          # a scope name or any step id
+        if last is None:
+            last = [s["id"] for s in self.state["steps"] if s["id"] != "verify"][-1]
         ids = [s["id"] for s in self.state["steps"]]
         self.state.update(status="running", scope=until, stopped_at=None, reason=None)
         for s in self.state["steps"][:ids.index(last) + 1]:

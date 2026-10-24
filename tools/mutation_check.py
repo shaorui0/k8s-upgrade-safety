@@ -39,6 +39,8 @@ MUTATIONS = [
     ("failed postcheck continues", "gate.py", "    if postcheck_ok:\n        who", "    if True:\n        who"),
     ("auto accepts plan warnings", "gate.py", 'if policy == "auto" and verdict["warnings"]:', "if False:"),
     ("assisted demands a signature", "gate.py", 'return policy == "manual" and step', 'return policy in ("manual", "assisted") and step'),
+    ("CCM precheck on workers always passes", "steps.py", '"ccm-healthy", "addon.healthy", "==", True,', '"ccm-healthy", "addon.healthy", "!=", None,'),
+    ("new apiserver no longer breaks the old CCM", "executors.py", 'self.c["addons"]["ccm"]["healthy"] = False      # the old', 'pass      # the old'),
     ("contract enum not enforced", "contracts/validator.py", 'if "enum" in schema and value not in schema["enum"]:', "if False:"),
     ("contract required not enforced", "contracts/validator.py", 'if key not in value:', "if False:"),
 ]

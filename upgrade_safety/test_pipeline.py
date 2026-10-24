@@ -249,21 +249,69 @@ class WorkerLayerTest(Base):
         self.assertEqual(run_def(eng, "workers:launch_template")["outcome"], "applied_pass")
         eng.c["addons"]["ccm"]["healthy"] = False
         out = run_def(eng, "workers:canary")
-        self.assertEqual(out["outcome"], "stopped_postcheck")
+        self.assertEqual(out["outcome"], "stopped_precheck")                 # the precheck catches it first
         self.assertIn("uninitialized taint", out["reason"])
+        self.assertEqual(eng.c["workers"]["nodes"][0]["ami"], "ami-synth-125")
+        # defence in depth: even if the precheck were bypassed, the executor reports the stuck node
+        res = eng.ex.execute(eng.defs["workers:canary"])
+        self.assertEqual(res["exit_code"], 1)
+        self.assertIn("uninitialized taint", res["stdout"])
+
+    def test_every_worker_step_carries_the_ccm_precheck(self):
+        eng = make_engine(self.runs, "ccmdefs")
+        worker = [d for d in eng.defs.values() if d["layer"] == "worker" and d["id"] != "workers:verify"]
+        self.assertTrue(worker)
+        for d in worker:
+            ids = [a["id"] for a in d["precheck"]]
+            self.assertIn("ccm-healthy", ids, d["id"])
 
 
 class AddonLayerTest(Base):
-    def test_ccm_unhealthy_stops_the_addon_layer_with_a_reason(self):
+    def test_ccm_broken_by_the_new_control_plane_stops_the_worker_layer_before_any_worker(self):
         code, out, rd = self.run_cluster("run", "prod-south", "--approve")
         self.assertEqual(code, 1)
         st = self.state(rd)
-        self.assertEqual(st["stopped_at"], "addon:ccm")
+        self.assertEqual(st["stopped_at"], "workers:launch_template")
         self.assertIn("uninitialized taint", st["reason"])
-        a = self.world(rd)["addons"]
+        w = self.world(rd)
+        self.assertTrue(all(m[k] == "1.26" for m in w["masters"] for k in ("apiserver", "controller_manager", "scheduler", "kubelet")))
+        self.assertEqual(w["workers"]["asg"]["ami"], "ami-synth-125")
+        self.assertEqual(w["workers"]["asg"]["launch_template"]["ami"], "ami-synth-125")
+        self.assertTrue(all(n["ami"] == "ami-synth-125" for n in w["workers"]["nodes"]))
+        a = w["addons"]
         self.assertEqual((a["ccm"]["version"], a["cni"]["version"], a["cluster_autoscaler"]["version"]), ("1.25",) * 3)
-        self.assertEqual(self.status(rd, "addon:cni"), "pending")
-        self.assertEqual(self.status(rd, "workers:verify"), "completed")      # earlier layers did finish
+        self.assertEqual(self.status(rd, "workers:canary"), "pending")
+        self.assertEqual(self.status(rd, "addon:ccm"), "pending")
+        self.assertEqual(self.status(rd, "master:prod-south-m3:verify"), "completed")      # control plane did finish
+        last = [json.loads(x) for x in (rd / "evidence.jsonl").read_text().splitlines()][-1]
+        self.assertEqual((last["outcome"], [a["id"] for a in last["assertions"] if not a["passed"]]),
+                         ("stopped_precheck", ["ccm-healthy"]))
+        self.assertNotIn("execute", last)                                                  # executor never called
+
+    def test_ccm_unhealthy_mid_layer_stops_the_next_batch(self):
+        eng = make_engine(self.runs, "mid")
+        eng.run("workers:canary")
+        self.assertEqual(self.status(Path(self.runs) / "mid", "workers:canary"), "completed")
+        eng.c["addons"]["ccm"]["healthy"] = False
+        self.assertEqual(eng.run("apply"), "failed")
+        self.assertEqual(eng.state["stopped_at"], "workers:batch1")
+        replaced = [n["name"] for n in eng.c["workers"]["nodes"] if n["ami"] == "ami-synth-126"]
+        self.assertEqual(replaced, ["dev-1-w1"])                                           # only the canary
+
+    def test_addon_layer_still_verifies_the_ccm_rollout(self):
+        import yaml
+        d = json.loads(json.dumps(FLEET.data))
+        d["clusters"][0]["addons"]["ccm"]["target_rollout_healthy"] = False
+        p = Path(self.runs) / "rollout.yaml"
+        p.write_text(yaml.safe_dump(d))
+        code, out = self.cli("run", "--cluster", "dev-1", "--approve", "--run-id", "rollout", fleet=p)
+        self.assertEqual(code, 1)
+        rd = Path(self.runs) / "rollout"
+        self.assertEqual(self.state(rd)["stopped_at"], "addon:ccm")
+        self.assertIn("uninitialized taint", self.state(rd)["reason"])
+        a = self.world(rd)["addons"]
+        self.assertEqual((a["cni"]["version"], a["cluster_autoscaler"]["version"]), ("1.25", "1.25"))
+        self.assertEqual(self.status(rd, "workers:verify"), "completed")
 
     def test_addon_order_is_enforced(self):
         eng = make_engine(self.runs, "order")
@@ -391,8 +439,8 @@ class ResumeTest(Base):
         _, _, rd = self.run_cluster("run", "prod-south", "--approve", run_id="stuck")
         code, _ = self.cli("run", "--cluster", "prod-south", "--resume", "stuck", "--approve")
         self.assertEqual(code, 1)
-        self.assertEqual(self.log(rd).count("START workers:batch1\n"), 1)
-        self.assertEqual(self.log(rd).count("START addon:ccm\n"), 2)        # failed step is retried, not skipped
+        self.assertEqual(self.log(rd).count("START master:prod-south-m3:verify\n"), 1)
+        self.assertEqual(self.log(rd).count("START workers:launch_template\n"), 2)        # failed step is retried, not skipped
 
     def test_mutating_steps_are_idempotent_and_skip_the_executor(self):
         eng = make_engine(self.runs, "idem")

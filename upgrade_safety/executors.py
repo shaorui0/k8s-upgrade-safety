@@ -100,6 +100,8 @@ class SimulatedExecutor(Executor):
             m["readyz"], m["lb_member"] = m["readyz_after_upgrade"], m["lb_after_upgrade"]
             if not m.get("etcd_returns", True):
                 next(x for x in e["members"] if x["name"] == master)["online"] = False
+            if self.c["addons"]["ccm"].get("healthy_after_control_plane") is False:
+                self.c["addons"]["ccm"]["healthy"] = False      # the old CCM does not survive the new apiserver
         else:
             m[component] = self.T
         return _result(command, f"{component} {self.T}", events=events)

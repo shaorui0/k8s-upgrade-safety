@@ -60,10 +60,14 @@ class GroundTruthTest(unittest.TestCase):
         c = self.fleet.cluster(self._cluster("raft_lag"))
         self.assertEqual(max(model.raft_lag(c["etcd"]).values()), 2000)
 
-    def test_ccm_rollout_unhealthy(self):
+    def test_ccm_breaks_after_the_new_control_plane_comes_up(self):
         c = self.fleet.cluster(self._cluster("ccm_unhealthy"))
-        self.assertFalse(c["addons"]["ccm"]["target_rollout_healthy"])
-        self.assertTrue(c["addons"]["ccm"]["healthy"])  # healthy today, unhealthy after the upgrade
+        ccm = c["addons"]["ccm"]
+        self.assertTrue(ccm["healthy"])                       # healthy at check time: check cannot see it
+        self.assertIs(ccm["healthy_after_control_plane"], False)
+        self.assertTrue(ccm["target_rollout_healthy"])        # the addon rollout itself is fine
+        self.assertEqual(next(f for f in self.fleet.faults if f["kind"] == "ccm_unhealthy")["expect_stop"],
+                         "workers:launch_template")
 
     def test_pdb_allows_zero_disruptions(self):
         c = self.fleet.cluster(self._cluster("pdb_blocks_drain"))

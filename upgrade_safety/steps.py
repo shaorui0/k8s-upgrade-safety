@@ -89,9 +89,13 @@ def build_steps(snap, tiers, policy="manual"):
             policy))
 
     # worker layer: terraform-style pointer change, then tiers (canary, batch, rollout)
+    ccm_ok = A("ccm-healthy", "addon.healthy", "==", True,
+               "an unhealthy cloud-controller-manager would strand new workers on the uninitialized taint",
+               {"addon": "ccm"})
     worker_pre = [
         A("control-plane-first", "masters.all_at_target", "==", True,
-          "workers never lead the control plane: the control plane must be fully at target first")]
+          "workers never lead the control plane: the control plane must be fully at target first"),
+        ccm_ok]
     steps.append(_step(
         "workers:launch_template", "point the launch template at the target AMI (AMI only)", "worker", True,
         {"engine": "terraform", "action": "terraform-lt"},
@@ -106,6 +110,7 @@ def build_steps(snap, tiers, policy="manual"):
             sid, f"replace {', '.join(t['nodes'])} ({t['phase']})", "worker", True,
             {"engine": "aws", "action": "asg-instance-refresh", "args": nodes},
             [A("ami-pointed", "asg.ami", "==", "$target_ami", "the launch template must be updated first"),
+             ccm_ok,
              A("no-pdb-block", "workers.drain_blockers", "==", 0, "a PDB allowing zero disruptions blocks the drain; never forced", nodes),
              A("eviction-in-time", "workers.slow_evictions", "==", 0, "eviction must finish inside the drain timeout; never forced", nodes)],
             [A("replaced", "workers.on_target_ami", "==", True, "the nodes run the target AMI and kubelet", nodes),

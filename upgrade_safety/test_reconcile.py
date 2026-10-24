@@ -173,7 +173,7 @@ class ContractsOnRunsTest(TmpBase):
         self.cli("run", "--cluster", "prod-south", "--approve", "--run-id", "cs")
         self.cli("run", "--cluster", "prod-south", "--approve", "--resume", "cs")
         recs = [json.loads(x) for x in (Path(self.runs) / "cs" / "evidence.jsonl").read_text().splitlines()]
-        self.assertEqual([r["outcome"] for r in recs if r["step_id"] == "addon:ccm"], ["stopped_postcheck"] * 2)
+        self.assertEqual([r["outcome"] for r in recs if r["step_id"] == "workers:launch_template"], ["stopped_precheck"] * 2)
 
     def test_snapshot_role_enum_rejects_other_roles(self):
         self.cli("check", "--cluster", "dev-1", "--run-id", "r")
