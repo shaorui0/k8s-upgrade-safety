@@ -4,6 +4,39 @@ A clean-room, runnable model of the upgrade safety system I built and ran across
 
 The original was a Python CLI orchestrating Ansible, boto3 and kubectl against real fleets. This repository is not that code. It is the *model* behind it, written as a state machine with gates ([`docs/METHOD.md`](docs/METHOD.md)) and executed by a simulator against a synthetic fleet with planted faults, so every gate can be run, broken and inspected. Source material is the two public write-ups only; see the data boundary in [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
 
+## Quickstart
+
+```bash
+pip install -r requirements.txt            # PyYAML only
+python3 -m unittest discover               # model, checks, plan, pipeline, fault matrix
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-canary --target 1.26 --approve
+open runs/*/report.html                    # decision, steps, criteria before/after, plan, diff, log
+```
+
+No cloud account, no kubectl, no network: the cluster is data. Try the gates:
+
+```bash
+# no --approve: stops at the printed plan, exit code 2, nothing changes
+python3 -m upgrade_safety apply --fleet testenv/fleet.yaml --cluster prod-canary --target 1.26
+
+# planted faults, each stopping at the step the method says it should
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-east  --approve   # raft lag 2000: stops at check
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-north --approve   # apiserver /readyz: stops before controller-manager
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-west  --approve   # PDB blocks drain: nothing forced
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-south --approve   # CCM unhealthy: addon layer stops
+
+# interrupt, then continue without repeating completed steps
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --approve --run-id demo --interrupt-at workers:batch1
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --approve --resume demo
+
+# the whole fleet in order; pauses at the first failure (here prod-east)
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --approve
+```
+
+Commands: `check`, `plan` (dry-run, no mutation), `apply` (through the addon layer), `verify` (needs `--resume <run>` for the baseline diff), `run` (apply + verify). Exit codes: 0 ok, 1 a gate stopped the run, 2 awaiting approval or usage error, 130 interrupted.
+
+**Scope of the claim.** The simulator shows the gate logic is consistent and its evidence is reproducible. It says nothing about real kubeadm, real etcd or real AWS behaviour. Sources are the two public write-ups of the original system; the numbers (50 clusters, 1.24 -> 1.29, 18-21 h with two people to 6-8 h with one operator, 20% batches, `serial: 1`, raft lag 1000, drain 300 s to 600 s) come from there. The roadmap items in the write-up (alert gating, synthetic checks, auto-promotion after canary) are targets, not results, and are not claimed here.
+
 ---
 
 ## How I think about it
@@ -23,6 +56,20 @@ Each answer traces to a numbered requirement in [`docs/REQUIREMENTS.md`](docs/RE
 | **What stays private?** | Everything from any employer. Clean-room, one leak scan per change. (R15) |
 
 ---
+
+## Repo layout
+
+```
+docs/METHOD.md            the model: state machine, step table, apiserver gate, quadrant, rollback, fleet order
+docs/REQUIREMENTS.md      R1.. requirement table and the data-boundary constraints
+upgrade_safety/           checks, plan, engine (steps, gates, resume), verify, evidence, report, cli
+testenv/                  fleet.yaml (9 clusters, 5 planted faults) and its generator
+tools/check_rules.py      leak scan; private patterns live in a gitignored .leak_patterns.local
+openspec/changes/         one OpenSpec change per row of Progress, each with evidence.md
+reports/  notes/blog/     local HTML report and raw blog notes per change
+.claude/skills/upgrade-change-loop/   the per-change loop
+runs/                     evidence of each run (gitignored): snapshots, plan, log, state, report.html
+```
 
 ## Progress
 
