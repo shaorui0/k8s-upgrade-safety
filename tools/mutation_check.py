@@ -35,6 +35,10 @@ MUTATIONS = [
     ("baseline regressions ignored", "verify.py", "healthy = not checks.failures(results) and not diff[\"regressions\"]",
      "healthy = not checks.failures(results)"),
     ("serial may exceed quorum", "plan.py", "within = SERIAL <= tolerated", "within = True"),
+    ("auto allowed on prod-class clusters", "gate.py", 'if policy == "auto" and cluster_type not in AUTO_ALLOWED_TYPES:', "if False:"),
+    ("failed postcheck continues", "gate.py", "    if postcheck_ok:\n        who", "    if True:\n        who"),
+    ("auto accepts plan warnings", "gate.py", 'if policy == "auto" and verdict["warnings"]:', "if False:"),
+    ("assisted demands a signature", "gate.py", 'return policy == "manual" and step', 'return policy in ("manual", "assisted") and step'),
     ("contract enum not enforced", "contracts/validator.py", 'if "enum" in schema and value not in schema["enum"]:', "if False:"),
     ("contract required not enforced", "contracts/validator.py", 'if key not in value:', "if False:"),
 ]

@@ -24,7 +24,8 @@ def render(rd):
     parts = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
              f"<title>{e(st['run_id'])}</title><style>{CSS}</style></head><body>",
              f"<h1>Upgrade run {e(st['run_id'])}</h1>",
-             f"<p>Cluster <code>{e(st['cluster'])}</code>, {e(st['from'])} &rarr; {e(st['target'])}, scope <code>{e(str(st['scope']))}</code>. "
+             f"<p>Cluster <code>{e(st['cluster'])}</code>, {e(st['from'])} &rarr; {e(st['target'])}, scope <code>{e(str(st['scope']))}</code>, "
+             f"gate policy <b>{e(st.get('gate_policy', 'manual'))}</b>. "
              f"Simulated: no network, no real cluster.</p>"]
     msg = f"status: <b>{e(status)}</b>"
     if st.get("decision"):
@@ -98,7 +99,7 @@ def write(rd):
 
 
 def write_fleet(rd, fleet_state):
-    rows = "".join(f"<tr><td><code>{e(n)}</code></td><td><code>{e(r['run_id'])}</code></td><td>{e(r['status'])}</td></tr>"
+    rows = "".join(f"<tr><td><code>{e(n)}</code></td><td><code>{e(str(r['run_id'] or '-'))}</code></td><td>{e(r['status'])}</td></tr>"
                    for n, r in fleet_state["runs"].items())
     stop = (f"<div class='banner bad'>fleet paused at <code>{e(fleet_state['stopped_at'])}</code>: "
             f"a human decides how to continue</div>") if fleet_state.get("stopped_at") else ""

@@ -202,14 +202,17 @@ class Engine:
 
     def _phase_gate_plan(self):
         t0 = now()
-        if self.gate_policy == "manual" and not self.approve:
-            reason = "gate:plan needs a human sign-off (re-run with --approve)"
-            return {"outcome": "halted_by_operator", "reason": reason, "awaiting": True,
-                    "evidence": self._evidence("gate:plan", "halted_by_operator", [], "stop", reason, started=t0)}
-        self.rd.log("SIGNOFF plan approved by operator (--approve)")
-        return {"outcome": "applied_pass", "reason": "plan approved", "awaiting": False,
-                "evidence": self._evidence("gate:plan", "applied_pass", [], "continue", "plan approved",
-                                           started=t0, decided_by=self.operator)}
+        verdict = self.rd.read_json("diff.json")["verdict"]
+        proceed, awaiting, who, reason = gate.plan_gate(self.gate_policy, verdict, self.approve)
+        if proceed:
+            self.rd.log("SIGNOFF plan approved by operator (--approve)" if self.gate_policy == "manual"
+                        else f"GATE plan passed by the engine ({self.gate_policy}): {reason}")
+            return {"outcome": "applied_pass", "reason": reason, "awaiting": False,
+                    "evidence": self._evidence("gate:plan", "applied_pass", [], "continue", reason,
+                                               started=t0, decided_by=who)}
+        outcome = "halted_by_operator" if awaiting else "stopped_precheck"
+        return {"outcome": outcome, "reason": reason, "awaiting": awaiting,
+                "evidence": self._evidence("gate:plan", outcome, [], "stop", reason, started=t0)}
 
     def _phase_verify(self):
         t0 = now()

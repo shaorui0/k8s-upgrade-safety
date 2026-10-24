@@ -6,13 +6,13 @@ import argparse
 import sys
 from datetime import datetime, timezone
 
-from . import model, report
+from . import gate, model, report
 from .engine import Engine, Interrupted
 from .executors import EXECUTORS
 from .evidence import RunDir
 
 COMMANDS = ("check", "plan", "apply", "verify", "run")
-CODES = {"complete": 0, "failed": 1, "awaiting_approval": 2, "interrupted": 130}
+CODES = {"complete": 0, "failed": 1, "awaiting_approval": 2, "refused": 2, "interrupted": 130}
 
 
 def parse(argv):
@@ -21,7 +21,8 @@ def parse(argv):
     p.add_argument("--fleet", required=True, help="path to fleet.yaml")
     p.add_argument("--cluster", help="one cluster; omit to walk the fleet in order")
     p.add_argument("--target", help="target minor, e.g. 1.26 (default: the fleet's target_version)")
-    p.add_argument("--approve", action="store_true", help="sign off the plan and each master (logged individually)")
+    p.add_argument("--approve", action="store_true", help="manual gate signature for the plan and each signoff step (logged per step)")
+    p.add_argument("--gate", choices=gate.POLICIES, help="gate policy: manual (default), assisted, or auto (dev-staging and management clusters only)")
     p.add_argument("--resume", metavar="RUN_ID", help="continue a run from its state.json")
     p.add_argument("--operator", default="operator", help="operator id recorded in evidence")
     p.add_argument("--executor", default="simulated", choices=sorted(EXECUTORS),
@@ -37,10 +38,17 @@ def _new_id(cmd, cluster):
 
 
 def run_one(args, fleet, cluster, run_id, resume, out):
+    if not resume:
+        try:
+            gate.validate_policy(args.gate or "manual", fleet.cluster(cluster)["cluster_type"])
+        except gate.GatePolicyError as ex:
+            print(f"[{cluster}] REFUSED: {ex}", file=out)
+            return "refused", None
     rd = RunDir(args.runs_dir, run_id, create=not resume)
     target = args.target or fleet.target_version
     eng = Engine(fleet, rd, cluster=cluster, target=target if not resume else args.target, approve=args.approve,
-                 interrupt_at=args.interrupt_at, resume=resume, executor=args.executor, operator=args.operator)
+                 interrupt_at=args.interrupt_at, resume=resume, executor=args.executor, operator=args.operator,
+                 gate_policy=args.gate or "manual")
     try:
         if args.command == "verify":
             status = eng.verify_only() if resume else _verify_fresh(eng)
@@ -63,12 +71,13 @@ def _verify_fresh(eng):
 def _print(args, eng, rd, status, out):
     st, name = eng.state, eng.state["cluster"]
     done = sum(1 for s in st["steps"] if s["status"] == "completed")
-    print(f"[{name}] {args.command}: {status.upper()}  run={rd.run_id}  steps {done}/{len(st['steps'])} completed", file=out)
+    print(f"[{name}] {args.command}: {status.upper()}  run={rd.run_id}  gate={st.get('gate_policy', 'manual')}  "
+          f"steps {done}/{len(st['steps'])} completed", file=out)
     if args.command in ("plan", "apply", "run") and rd.exists("plan.txt") and status in ("complete", "awaiting_approval"):
         print(rd.read_text("plan.txt"), end="", file=out)
     if status == "awaiting_approval":
         print(f"NOT APPROVED: stopped at {st['stopped_at']}; nothing was changed. Review the plan, then re-run with "
-              f"--approve (or --resume {rd.run_id} --approve). Each master is signed off individually.", file=out)
+              f"--approve (or --resume {rd.run_id} --approve), or choose --gate assisted. Each signoff step is signed individually.", file=out)
     if status == "failed":
         print(f"STOPPED at {st['stopped_at']}: {st['reason']}", file=out)
         if rd.exists("rollback.json"):
@@ -130,8 +139,8 @@ def _fleet(args, fleet, out):
             print(f"[{name}] already complete in this fleet run; skipping", file=out)
             continue
         resume = frd.__class__(args.runs_dir, rid, create=False).exists("state.json")
-        status, _ = run_one(args, fleet, name, rid, resume, out)
-        fs["runs"][name] = {"run_id": rid, "status": status}
+        status, eng = run_one(args, fleet, name, rid, resume, out)
+        fs["runs"][name] = {"run_id": rid if eng else None, "status": status}
         if status != "complete":
             code = max(code, CODES[status])
             if mutating:

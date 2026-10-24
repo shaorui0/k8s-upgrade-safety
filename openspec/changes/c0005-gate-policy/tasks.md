@@ -1,7 +1,7 @@
 ## 1. Policy
-- [ ] 1.1 `gate.py`: policies, auto restriction by cluster type, plan gate, decision table
-- [ ] 1.2 engine and CLI: `--gate`, refusal before a run directory exists, policy kept across resume, fleet pause on refusal
-- [ ] 1.3 `test_gate.py`: refusal on prod, assisted completes and stops, auto on dev, auto refuses warnings, manual unchanged, evidence and contracts
+- [x] 1.1 `gate.py`: policies, auto restriction by cluster type, plan gate, decision table
+- [x] 1.2 engine and CLI: `--gate`, refusal before a run directory exists, policy kept across resume, fleet pause on refusal
+- [x] 1.3 `test_gate.py`: refusal on prod, assisted completes and stops, auto on dev, auto refuses warnings, manual unchanged, evidence and contracts
 
 ## 2. Docs
 - [ ] 2.1 METHOD gate section, README, REQUIREMENTS R21-R22
