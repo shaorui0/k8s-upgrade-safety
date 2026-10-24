@@ -8,7 +8,7 @@
 - **THEN** every stage has at least one cluster and there are at least five clusters
 
 ### Requirement: Planted faults with ground truth
-The fleet SHALL plant at least these faults and list them under `faults:` with cluster, kind and the step expected to stop: a raft follower lagging by 2000, a CCM whose target rollout is unhealthy, a PDB allowing zero disruptions on a stateful node, and a node whose eviction takes longer than the default 300 s drain timeout in a cluster without the 600 s flag.
+The fleet SHALL plant at least these faults and list them under `faults:` with cluster, kind and the step expected to stop: a raft follower lagging by 2000, a CCM (revised in c0006: healthy at check time, unhealthy once the new control plane is up, expected stop `workers:launch_template`) whose target rollout is unhealthy, a PDB allowing zero disruptions on a stateful node, and a node whose eviction takes longer than the default 300 s drain timeout in a cluster without the 600 s flag.
 
 #### Scenario: Ground truth matches data
 - **WHEN** a test reads each fault's cluster

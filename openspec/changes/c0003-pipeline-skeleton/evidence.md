@@ -1,5 +1,8 @@
 # c0003 acceptance evidence
 
+> Note (c0006): fault F2 was later re-planted. It is now an old CCM broken by the new control plane and stops at `workers:launch_template`, not at `addon:ccm`. The output below is verbatim from this change's acceptance run and is kept as it was.
+
+
 ## 3.1 all tests (verbose)
 ```
 $ python3 -m unittest discover -v 2>&1; python3 -m unittest discover -s tools 2>&1 | tail -3

@@ -24,7 +24,7 @@ python3 -m upgrade_safety apply --fleet testenv/fleet.yaml --cluster prod-canary
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-east  --approve   # raft lag 2000: stops at check
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-north --approve   # apiserver /readyz: stops before controller-manager
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-west  --approve   # PDB blocks the canary drain: nothing forced
-python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-south --approve   # CCM unhealthy: addon layer stops
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-south --approve   # CCM broken by the new control plane: worker layer stops before any worker
 
 # progressive autonomy
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-canary --gate auto        # refused: exit 2, no run created

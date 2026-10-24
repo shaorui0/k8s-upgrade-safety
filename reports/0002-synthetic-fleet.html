@@ -188,6 +188,13 @@ fleet is byte-identical, scan OK, 0 private-pattern hits,
 <code>openspec validate</code> passes.</p>
 <h1 id="acceptance-evidence-verbatim">Acceptance evidence
 (verbatim)</h1>
+<blockquote>
+<p>Note (c0006): fault F2 was later re-planted. It is now an old CCM
+broken by the new control plane and stops at
+<code>workers:launch_template</code>, not at <code>addon:ccm</code>. The
+output below is verbatim from this change’s acceptance run and is kept
+as it was.</p>
+</blockquote>
 <h2 id="all-tests">3.1 all tests</h2>
 <pre><code>$ python3 -m unittest discover -v 2&gt;&amp;1 | tail -40
 test_minor_rejects_garbage (upgrade_safety.test_model.ArithmeticTest.test_minor_rejects_garbage) ... ok

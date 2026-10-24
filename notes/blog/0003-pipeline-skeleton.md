@@ -10,3 +10,4 @@
 - Plan warnings versus violations: a PDB at zero or an eviction slower than the timeout is a warning in plan (the human sees it at the gate) and a stop in apply. Arguably the plan could fail on it. I kept it as a warning because the decision (wait, lower minAvailable, set the 600 s flag) is a human one either way.
 - CCM fault design: healthy now, unhealthy after the rollout. If it were unhealthy now, `check` would stop it and the addon gate would never be exercised.
 - The model chose "workers then addons" order from the write-up, which means a broken CCM rollout is found after workers are replaced. The CCM-first rule still matters because the Cluster Autoscaler scale-out check needs new nodes to initialise. Worth revisiting whether CCM should be a precondition of the worker layer.
+- (Answered in c0006: CCM health became a precheck of the worker layer.)

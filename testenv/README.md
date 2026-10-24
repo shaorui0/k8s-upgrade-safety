@@ -9,7 +9,7 @@
 | `prod-canary` | prod-canary | workload | clean; Kafka and MySQL nodes with healthy PDBs; flag 600 |
 | `prod-east` | prod | workload | **F1** one etcd follower 2000 entries behind: `check` fails |
 | `prod-west` | prod | workload | **F3** MySQL node's PDB allows zero disruptions: the canary (first, stateful) node's drain blocks, no forced drain |
-| `prod-south` | prod | workload | **F2** the target CCM rollout is unhealthy: addon layer stops at CCM |
+| `prod-south` | prod | workload | **F2** the old CCM is healthy at `check` but unhealthy once the new control plane is up: the worker layer stops at `workers:launch_template` (CCM health is a precheck there), no worker replaced |
 | `prod-eu` | prod | workload | **F4** a node evicts in 540 s with the default 300 s timeout: worker batch stops, the fix is the 600 s flag |
 | `prod-north` | prod | workload | **F5** the second master's apiserver never passes `/readyz` or LB membership: control plane stops before controller-manager is touched |
 | `mgmt-1` | management | management | clean; always last |

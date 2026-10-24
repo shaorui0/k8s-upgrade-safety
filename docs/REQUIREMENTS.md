@@ -21,7 +21,7 @@ Source of truth for every number: the two public write-ups (project page and blo
 | R9 | Rollback triggers are declared before execution: master upgrade fails, more than 50% of pods not Running, critical service unreachable, alert flood; actions per layer (control plane: snapshot restore + binary downgrade; workers: stop refresh + revert LT; addons: rollout undo) | rollback advice in run evidence |
 | R10 | Fleet order dev -> preprod -> prod canary -> remaining prod -> management last; any failure pauses the whole fleet for a human | fleet run test |
 | R11 | Hard parts are method entries, not footnotes: API deprecation (PSP to PSA warn/audit first), stateful nodes first with PDBs never forced, heterogeneity via `cluster_type` + per-cluster flags, "zero incidents" against a pre-agreed standard, leader transfer is expected while a member that does not return is the danger | `docs/METHOD.md` section 8 |
-| R12 | The synthetic fleet has at least five clusters of all five stages and at least four planted faults (raft lag 2000, unhealthy CCM rollout, PDB blocking drain, slow eviction needing a 600 s flag) | `testenv/fleet.yaml` ground truth + tests |
+| R12 | The synthetic fleet has at least five clusters of all five stages and at least four planted faults (raft lag 2000, CCM broken by the new control plane, PDB blocking drain, slow eviction needing a 600 s flag) | `testenv/fleet.yaml` ground truth + tests |
 | R13 | Every run produces `runs/<id>/report.html` | acceptance command |
 | R14 | Process is the deliverable: each change is an OpenSpec change, staged commits, evidence file, local HTML report, raw blog notes | `openspec/changes/`, `reports/`, `notes/blog/` |
 | R15 | Public-safe: a leak scan is part of every acceptance | `python3 tools/check_rules.py` |
@@ -32,6 +32,7 @@ Source of truth for every number: the two public write-ups (project page and blo
 | R20 | Worker blast radius is tiered (canary of one node, then batches of at most 20%, stateful alone), orthogonal to layer order master, worker, components | tier tests |
 | R21 | Gate policy `manual | assisted | auto` (`--gate`): manual needs a signature per signoff step; assisted continues on a passing postcheck and stops on a failing one; auto is the same unattended and also refuses plans with warnings | gate tests |
 | R22 | Autonomy is bounded by cluster class: `auto` is refused for workload (prod-class) clusters before a run exists; allowed on dev-staging and management | test: refused, no run directory |
+| R23 | Cloud-controller-manager health is a precheck of every worker-layer step (an unhealthy CCM strands new workers on the uninitialized taint); the addon layer still verifies the CCM rollout itself | CCM precheck tests, fault F2 stops at `workers:launch_template` |
 
 ## 3. Constraints
 

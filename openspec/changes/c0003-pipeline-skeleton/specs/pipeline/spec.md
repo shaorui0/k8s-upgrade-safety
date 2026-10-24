@@ -47,7 +47,7 @@ Worker replacement SHALL happen in ASG-refresh batches of 20% with stateful node
 Addons SHALL be upgraded CCM, then CNI, then Cluster Autoscaler, each requiring the previous to be completed; an unhealthy CCM rollout SHALL stop the layer and say why, leaving CNI and Cluster Autoscaler untouched.
 
 #### Scenario: CCM unhealthy
-- **WHEN** the target CCM rollout is unhealthy
+- **WHEN** the target CCM rollout is unhealthy and the worker layer has completed (in the fleet, fault F2 now stops earlier at the worker layer, see c0006)
 - **THEN** the run stops at `addon:ccm`, the reason mentions the uninitialized taint, and CNI and Cluster Autoscaler versions are unchanged
 
 ### Requirement: Version x health quadrant

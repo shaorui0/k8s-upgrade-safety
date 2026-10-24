@@ -99,7 +99,7 @@ Every failure ends at a human. The system never decides to retry a layer on its 
 | 3 | `plan` | the **diff artifact**: desired versus observed, per-change reversibility, pointer alignment, quorum-math blast radius, verdict; kubeadm dry-run clean; worker AMI kubelet = target; Launch Template differs only in AMI | stop, human |
 | 4 | `gate:plan` | human approval (`--approve`) after reading the diff | stop at plan, exit 2 |
 | 5 | control plane, per master | gate (sign-off) -> apiserver -> `/readyz` + LB membership -> controller-manager -> scheduler -> kubelet -> etcd member back, lag <= 1000, node Ready | stop layer, human, rollback advice |
-| 6 | workers | Launch Template AMI-only update; then canary (one node), then ASG instance refresh batches of at most 20% (stateful nodes alone, first); each: drain without force, replace, nodes Ready | stop on first failed step |
+| 6 | workers | precheck on every step: control plane fully at target and **CCM healthy**; Launch Template AMI-only update; then canary (one node), then ASG instance refresh batches of at most 20% (stateful nodes alone, first); each: drain without force, replace, nodes Ready | stop on first failed step |
 | 7 | components (addons) | CCM -> CNI -> Cluster Autoscaler, each with its own verification, each requires the previous | stop layer |
 | 8 | `verify` | full check re-run, diff against baseline file, version x health quadrant | human unless quadrant is "proceed" |
 
@@ -159,13 +159,15 @@ Upgrading the master that holds the etcd leadership moves leadership (a 1-2 seco
 
 New AMI, Launch Template updated (AMI only), ASG instance refresh in **20%** batches, pause on failure. Nodes hosting databases are mapped beforehand and go first, one at a time (batches smaller than 20%, never larger). Drain never forces: a PDB that allows zero disruptions blocks the drain, and the procedure is wait-for-PDB or an explicit human decision to lower `minAvailable`. Drain timeout is 300 s by default; a cluster known to evict slowly carries a per-cluster flag of 600 s.
 
+**CCM health is a precondition of the whole layer.** A new worker only becomes useful when the cloud-controller-manager initialises it; with an unhealthy CCM it joins and sticks on the `uninitialized` taint. Every worker step (launch template, canary, each batch) therefore carries a blocking precheck `addon.healthy{ccm}`; a failure stops the step before any executor call, so nothing is replaced. This catches the case `check` cannot: a CCM that was healthy before the upgrade and was broken by the new control plane. The addon layer still verifies the CCM *rollout* afterwards. Layer order is unchanged; this is a dependency edge from components' health to the worker layer, not a reordering.
+
 Tiers: step `workers:canary` replaces exactly one node (the first stateful node if any); `workers:batch<N>` follow, each at most 20% of the group. On a dark (traffic-shifted) cluster the 20% batch is a *pacing* mechanism, small enough to pause fast, rather than user protection.
 
 ### 4.3 Addons: dependency order
 
 | Order | Addon | Verification | Why here |
 |---|---|---|---|
-| 1 | cloud-controller-manager | rollout healthy | an unhealthy CCM leaves new workers stuck on the `uninitialized` taint |
+| 1 | cloud-controller-manager | rollout healthy | an unhealthy CCM leaves new workers stuck on the `uninitialized` taint (so its health is also a precheck of the worker layer, see 4.2) |
 | 2 | CNI (`maxUnavailable: 1`) | cross-node pod connectivity | scale-out and rescheduling need the network |
 | 3 | Cluster Autoscaler | drain one node, observe a successful scale-out | its verification needs nodes that can initialise (CCM) and networking (CNI) |
 

@@ -194,6 +194,13 @@ survived on the first pass, tests added); scan OK, 0 private-pattern
 hits, <code>openspec validate</code> passes.</p>
 <h1 id="acceptance-evidence-verbatim">Acceptance evidence
 (verbatim)</h1>
+<blockquote>
+<p>Note (c0006): fault F2 was later re-planted. It is now an old CCM
+broken by the new control plane and stops at
+<code>workers:launch_template</code>, not at <code>addon:ccm</code>. The
+output below is verbatim from this change’s acceptance run and is kept
+as it was.</p>
+</blockquote>
 <h2 id="all-tests-verbose">3.1 all tests (verbose)</h2>
 <pre><code>$ python3 -m unittest discover -v 2&gt;&amp;1; python3 -m unittest discover -s tools 2&gt;&amp;1 | tail -3
 test_clean_cluster_passes_all_eight (upgrade_safety.test_checks_plan.CheckTest.test_clean_cluster_passes_all_eight) ... ok
