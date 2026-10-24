@@ -1,6 +1,6 @@
 ## 1. Scan tool
-- [ ] 1.1 `tools/check_rules.py`: required files, generic + local leak patterns, file:line output
-- [ ] 1.2 `tools/test_check_rules.py`: planted leak fails, clean tree passes, missing doc fails
+- [x] 1.1 `tools/check_rules.py`: required files, generic + local leak patterns, file:line output
+- [x] 1.2 `tools/test_check_rules.py`: planted leak fails, clean tree passes, missing doc fails
 
 ## 2. Documents
 - [ ] 2.1 `docs/REQUIREMENTS.md` (goal, requirement table, constraints)
