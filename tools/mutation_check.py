@@ -21,7 +21,7 @@ MUTATIONS = [
     ("next-component guard always passes", "probes.py",
      'ok = m["apiserver"] == t and m["readyz"] and m["lb_member"] == "healthy"', "ok = True"),
     ("step sign-off ignored", "reconcile.py", "if not ctx.approved:", "if False:"),
-    ("plan sign-off ignored", "engine.py", "if self.gate_policy == \"manual\" and not self.approve:", "if False:"),
+    ("plan sign-off ignored", "gate.py", "        if approved:\n            return True, False", "        if True:\n            return True, False"),
     ("completed steps re-executed on resume", "engine.py", 'if s["status"] == "completed":\n                self.rd.log(f"SKIP',
      'if False:\n                self.rd.log(f"SKIP'),
     ("PDB zero-disruption not a blocker", "probes.py", 'p["current_healthy"] - p["min_available"] <= 0', 'p["current_healthy"] - p["min_available"] < -99'),

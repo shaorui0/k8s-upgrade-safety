@@ -1,0 +1,10 @@
+# 0005-gate-policy notes
+
+- Autonomy is a dial on who decides to continue, not a different engine. The same step loop runs under manual, assisted and auto; only `gate.py` changes the answer. That is why the evidence from a watched run and an unattended run look identical, and why a post-mortem does not care which one it was.
+- The whole saving is the manual to assisted jump. Manual asks a human to read and press enter on every step; assisted continues on a passing postcheck and wakes a human only on failure. Auto adds nothing to the decision, it only removes the person, so the interesting question about auto is where it is allowed.
+- Bound autonomy by cluster class, in code. "Auto on prod is refused" is a test that asserts no run directory exists afterwards, not a sentence in a runbook. The refusal happens before anything is created, so there is nothing half-started to clean up.
+- Counter-intuitive: auto is stricter than assisted about the plan. Assisted proceeds past a plan with warnings because a human is there to be woken. Auto refuses it, because a warning that nobody will read is the same as no warning. The unattended mode needs a cleaner plan, not a more permissive one.
+- Who stopped it is data. Under manual a failed postcheck is `halted_by_operator`, under assisted and auto it is `stopped_postcheck`. Same failure, different owner of the next move.
+- `--approve` is not a general permission. It is the manual signature and is ignored elsewhere. I considered making it satisfy assisted too and rejected it: a flag that means "I looked" must not also mean "I did not need to".
+- The policy is part of the run, not of the invocation: stored in state, in every step definition and in evidence, and kept on `--resume`. Resuming an assisted run with no `--gate` must not silently fall back to manual or, worse, widen to auto.
+- Mutation check caught a stale mutation, not a stale test: after moving the plan decision into `gate.plan_gate` the "plan sign-off ignored" mutation pattern no longer existed and reported BROKEN. A mutation tool that treats an unmatched pattern as a failure is what keeps the list honest as the code moves.

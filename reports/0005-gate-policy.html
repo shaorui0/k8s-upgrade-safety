@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>0005-gate-policy</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">0005-gate-policy</h1>
+</header>
+<h1 id="c0005-gate-policy">c0005 gate policy</h1>
+<p><strong>What changed.</strong>
+<code>--gate manual|assisted|auto</code>. Manual: an operator signature
+per signoff step, a failed postcheck halts for the operator. Assisted:
+no signatures, the plan gate reads the diff verdict, each step continues
+on a passing postcheck and stops on a failing one. Auto: the same
+decision with nobody present, additionally refusing plans that carry
+warnings, and allowed only on <code>dev-staging</code> and
+<code>management</code> clusters. Asking for auto on a
+<code>workload</code> cluster is refused with exit 2 before a run
+directory exists. The policy is recorded in state, step definitions and
+every evidence record and survives resume.</p>
+<p><strong>Why.</strong> The saving in the design is the jump from a
+human reading every step to a human woken by exceptions, and that
+autonomy has to be bounded by cluster class rather than by operator
+care.</p>
+<p><strong>Verdict.</strong> 146 tests green; auto refused on prod-class
+clusters with no run created; assisted completes a prod-class cluster
+with zero signatures and stops at the failed postcheck on the planted
+fault; auto runs unattended on dev-1; a fleet with
+<code>--gate auto</code> pauses at the first prod-class cluster; 23/23
+gate mutations killed; scan OK, 0 private-pattern hits,
+<code>openspec validate</code> passes.</p>
+<h1 id="acceptance-evidence-verbatim">Acceptance evidence
+(verbatim)</h1>
+<h2 id="all-tests-tail-gate-tests-verbose-mutation-check">3.1 all tests
+(tail), gate tests (verbose), mutation check</h2>
+<pre><code>$ python3 -m unittest discover 2&gt;&amp;1 | tail -4; python3 -m unittest -v upgrade_safety.test_gate 2&gt;&amp;1 | grep -E &#39;ok$|Ran|OK|FAIL&#39; ; python3 tools/mutation_check.py
+----------------------------------------------------------------------
+Ran 146 tests in 8.347s
+
+OK
+test_assisted_ignores_approve_and_manual_does_not_run_without_it (upgrade_safety.test_gate.AssistedTest.test_assisted_ignores_approve_and_manual_does_not_run_without_it) ... ok
+test_completes_a_prod_class_cluster_without_a_signature (upgrade_safety.test_gate.AssistedTest.test_completes_a_prod_class_cluster_without_a_signature) ... ok
+test_manual_same_failure_is_halted_by_operator (upgrade_safety.test_gate.AssistedTest.test_manual_same_failure_is_halted_by_operator) ... ok
+test_policy_is_kept_across_resume (upgrade_safety.test_gate.AssistedTest.test_policy_is_kept_across_resume) ... ok
+test_precheck_failures_still_stop_under_assisted (upgrade_safety.test_gate.AssistedTest.test_precheck_failures_still_stop_under_assisted) ... ok
+test_steps_json_records_the_policy (upgrade_safety.test_gate.AssistedTest.test_steps_json_records_the_policy) ... ok
+test_stops_at_the_failed_postcheck_and_nothing_after_it_runs (upgrade_safety.test_gate.AssistedTest.test_stops_at_the_failed_postcheck_and_nothing_after_it_runs) ... ok
+test_allowed_on_dev_and_management_unattended (upgrade_safety.test_gate.AutoOnProdIsRefusedTest.test_allowed_on_dev_and_management_unattended) ... ok
+test_check_and_plan_are_refused_too (upgrade_safety.test_gate.AutoOnProdIsRefusedTest.test_check_and_plan_are_refused_too) ... ok
+test_engine_constructor_refuses_too (upgrade_safety.test_gate.AutoOnProdIsRefusedTest.test_engine_constructor_refuses_too) ... ok
+test_fleet_with_auto_pauses_at_the_first_prod_class_cluster (upgrade_safety.test_gate.AutoOnProdIsRefusedTest.test_fleet_with_auto_pauses_at_the_first_prod_class_cluster) ... ok
+test_refused_before_a_run_directory_exists (upgrade_safety.test_gate.AutoOnProdIsRefusedTest.test_refused_before_a_run_directory_exists) ... ok
+test_auto_refuses_a_plan_with_warnings_assisted_accepts_it (upgrade_safety.test_gate.AutoTest.test_auto_refuses_a_plan_with_warnings_assisted_accepts_it) ... ok
+test_auto_stops_on_a_failed_postcheck_unattended (upgrade_safety.test_gate.AutoTest.test_auto_stops_on_a_failed_postcheck_unattended) ... ok
+test_manual_without_approve_stays_awaiting (upgrade_safety.test_gate.AutoTest.test_manual_without_approve_stays_awaiting) ... ok
+test_auto_only_on_low_risk_types (upgrade_safety.test_gate.PolicyTableTest.test_auto_only_on_low_risk_types) ... ok
+test_decision_table (upgrade_safety.test_gate.PolicyTableTest.test_decision_table) ... ok
+test_manual_and_assisted_allowed_everywhere (upgrade_safety.test_gate.PolicyTableTest.test_manual_and_assisted_allowed_everywhere) ... ok
+test_plan_gate (upgrade_safety.test_gate.PolicyTableTest.test_plan_gate) ... ok
+test_signoff_only_under_manual (upgrade_safety.test_gate.PolicyTableTest.test_signoff_only_under_manual) ... ok
+test_unknown_policy (upgrade_safety.test_gate.PolicyTableTest.test_unknown_policy) ... ok
+Ran 21 tests in 1.846s
+OK
+killed   raft lag limit 1000 -&gt; 3000
+killed   apiserver /readyz probe always true
+killed   apiserver LB-membership probe always true
+killed   next-component guard always passes
+killed   step sign-off ignored
+killed   plan sign-off ignored
+killed   completed steps re-executed on resume
+killed   PDB zero-disruption not a blocker
+killed   drain timeout ignored
+killed   addon order not enforced
+killed   CCM rollout health ignored
+killed   irreversible step runs without backup
+killed   already_done skip disabled
+killed   canary widened to the whole first batch
+killed   quadrant: unhealthy still proceeds
+killed   baseline regressions ignored
+killed   serial may exceed quorum
+killed   auto allowed on prod-class clusters
+killed   failed postcheck continues
+killed   auto accepts plan warnings
+killed   assisted demands a signature
+killed   contract enum not enforced
+killed   contract required not enforced
+
+23/23 mutations killed
+exit=0</code></pre>
+<h2
+id="auto-is-refused-on-a-prod-class-cluster-exit-2-no-run-directory">auto
+is refused on a prod-class cluster: exit 2, no run directory</h2>
+<pre><code>$ python3 -m upgrade_safety run $F --cluster prod-canary --gate auto --run-id acc-auto-prod; echo cli-exit=$?; if [ -d runs/acc-auto-prod ]; then echo &#39;run directory exists&#39;; else echo &#39;no run directory was created&#39;; fi
+[prod-canary] REFUSED: gate policy &#39;auto&#39; is refused for a &#39;workload&#39; cluster: unattended runs are allowed only on dev-staging and management clusters. Use &#39;assisted&#39; (a human is woken on every failure) or &#39;manual&#39;
+cli-exit=2
+no run directory was created
+exit=0</code></pre>
+<h2 id="auto-on-dev-1-runs-unattended-no-approve">auto on dev-1 runs
+unattended (no –approve)</h2>
+<pre><code>$ python3 -m upgrade_safety run $F --cluster dev-1 --gate auto --run-id acc-auto-dev | head -1; echo cli-exit=${PIPESTATUS[0]}; grep -c SIGNOFF runs/acc-auto-dev/execution.log; python3 -c &quot;import json; r=[json.loads(l) for l in open(&#39;runs/acc-auto-dev/evidence.jsonl&#39;)]; print(len(r), &#39;records; policies&#39;, sorted({x[&#39;gate_decision&#39;][&#39;policy&#39;] for x in r}), &#39;decided_by&#39;, sorted({x[&#39;gate_decision&#39;][&#39;decided_by&#39;] for x in r}))&quot;
+[dev-1] run: COMPLETE  run=acc-auto-dev  gate=auto  steps 31/31 completed
+cli-exit=0
+0
+31 records; policies [&#39;auto&#39;] decided_by [&#39;engine&#39;]
+exit=0</code></pre>
+<h2
+id="assisted-completes-a-prod-class-cluster-with-no-signatures">assisted
+completes a prod-class cluster with no signatures</h2>
+<pre><code>$ python3 -m upgrade_safety run $F --cluster prod-canary --gate assisted --run-id acc-assisted | head -1; echo cli-exit=${PIPESTATUS[0]}; echo SIGNOFF lines: $(grep -c SIGNOFF runs/acc-assisted/execution.log); grep &#39;GATE plan&#39; runs/acc-assisted/execution.log; python3 -c &quot;import json; r=[json.loads(l) for l in open(&#39;runs/acc-assisted/evidence.jsonl&#39;)]; print(len(r), &#39;records; policies&#39;, sorted({x[&#39;gate_decision&#39;][&#39;policy&#39;] for x in r}), &#39;decided_by&#39;, sorted({x[&#39;gate_decision&#39;][&#39;decided_by&#39;] for x in r}), &#39;outcomes&#39;, sorted({x[&#39;outcome&#39;] for x in r}))&quot;
+[prod-canary] run: COMPLETE  run=acc-assisted  gate=assisted  steps 33/33 completed
+cli-exit=0
+SIGNOFF lines: 0
+2026-10-24T05:34:45+00:00 INFO  GATE plan passed by the engine (assisted): diff verdict safe_to_apply (assisted)
+33 records; policies [&#39;assisted&#39;] decided_by [&#39;engine&#39;] outcomes [&#39;applied_pass&#39;]
+exit=0</code></pre>
+<h2
+id="assisted-stops-at-the-failed-postcheck-manual-halts-for-the-operator-on-the-same-failure">assisted
+stops at the failed postcheck; manual halts for the operator on the same
+failure</h2>
+<pre><code>$ python3 -m upgrade_safety run $F --cluster prod-north --gate assisted --run-id acc-as-north | head -1 | cut -c1-110; python3 -m upgrade_safety run $F --cluster prod-north --approve --run-id acc-man-north | head -1 | cut -c1-110; for r in acc-as-north acc-man-north; do python3 -c &quot;import json; r=[json.loads(l) for l in open(&#39;runs/$r/evidence.jsonl&#39;)][-1]; print(&#39;%-14s %-40s %-20s decision=%s by %s&#39; % (&#39;$r&#39;, r[&#39;step_id&#39;], r[&#39;outcome&#39;], r[&#39;gate_decision&#39;][&#39;decision&#39;], r[&#39;gate_decision&#39;][&#39;decided_by&#39;]))&quot;; done; python3 -c &quot;import json; m={x[&#39;name&#39;]:x for x in json.load(open(&#39;runs/acc-as-north/cluster.json&#39;))[&#39;masters&#39;]}; print(&#39;m2 apiserver&#39;, m[&#39;prod-north-m2&#39;][&#39;apiserver&#39;], &#39;cm&#39;, m[&#39;prod-north-m2&#39;][&#39;controller_manager&#39;], &#39;| m3 apiserver&#39;, m[&#39;prod-north-m3&#39;][&#39;apiserver&#39;])&quot;
+[prod-north] run: FAILED  run=acc-as-north  gate=assisted  steps 11/33 completed
+[prod-north] run: FAILED  run=acc-man-north  gate=manual  steps 11/33 completed
+acc-as-north   master:prod-north-m2:apiserver_ready     stopped_postcheck    decision=stop by engine
+acc-man-north  master:prod-north-m2:apiserver_ready     halted_by_operator   decision=stop by engine
+m2 apiserver 1.26 cm 1.25 | m3 apiserver 1.25
+exit=0</code></pre>
+<h2
+id="auto-refuses-a-plan-with-warnings-assisted-accepts-the-same-plan-unit-tests">auto
+refuses a plan with warnings; assisted accepts the same plan (unit
+tests)</h2>
+<pre><code>$ python3 -m unittest -v upgrade_safety.test_gate.AutoTest 2&gt;&amp;1 | tail -9
+test_auto_refuses_a_plan_with_warnings_assisted_accepts_it (upgrade_safety.test_gate.AutoTest.test_auto_refuses_a_plan_with_warnings_assisted_accepts_it) ... ok
+test_auto_stops_on_a_failed_postcheck_unattended (upgrade_safety.test_gate.AutoTest.test_auto_stops_on_a_failed_postcheck_unattended) ... ok
+test_manual_without_approve_stays_awaiting (upgrade_safety.test_gate.AutoTest.test_manual_without_approve_stays_awaiting) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.337s
+
+OK
+exit=0</code></pre>
+<h2
+id="fleet-with-gate-auto-pauses-at-the-first-prod-class-cluster">fleet
+with –gate auto pauses at the first prod-class cluster</h2>
+<pre><code>$ python3 -m upgrade_safety run $F --gate auto --run-id acc-fleet | grep -E &#39;^\[|FLEET&#39; | cut -c1-120; echo cli-exit=${PIPESTATUS[0]}
+[dev-1] run: COMPLETE  run=acc-fleet-dev-1  gate=auto  steps 31/31 completed
+[preprod-1] run: COMPLETE  run=acc-fleet-preprod-1  gate=auto  steps 32/32 completed
+[prod-canary] REFUSED: gate policy &#39;auto&#39; is refused for a &#39;workload&#39; cluster: unattended runs are allowed only on dev-s
+FLEET PAUSED at prod-canary: a human decides how to continue. Not started: prod-east, prod-eu, prod-north, prod-south, p
+cli-exit=2
+exit=0</code></pre>
+<h2 id="scan-independent-grep-openspec">3.3 scan, independent grep,
+openspec</h2>
+<pre><code>$ python3 tools/check_rules.py; grep -rniE -f .leak_patterns.local --exclude-dir=.git --exclude=.leak_patterns.local --exclude-dir=runs --exclude-dir=__pycache__ . | wc -l; openspec validate c0005-gate-policy
+check_rules: OK
+       0
+Change &#39;c0005-gate-policy&#39; is valid
+exit=0</code></pre>
+</body>
+</html>
