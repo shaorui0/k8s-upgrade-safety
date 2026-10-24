@@ -30,6 +30,8 @@ Source of truth for every number: the two public write-ups (project page and blo
 | R18 | Every step declares `reversible`; an irreversible step is refused without its `backup_precondition` (the etcd snapshot is one instance) | test: no snapshot, no execute |
 | R19 | Control plane and execution plane are separate: the engine acts only through an `Executor` interface; only a simulated executor is implemented, real adapters are named and refuse | executor seam tests |
 | R20 | Worker blast radius is tiered (canary of one node, then batches of at most 20%, stateful alone), orthogonal to layer order master, worker, components | tier tests |
+| R21 | Gate policy `manual | assisted | auto` (`--gate`): manual needs a signature per signoff step; assisted continues on a passing postcheck and stops on a failing one; auto is the same unattended and also refuses plans with warnings | gate tests |
+| R22 | Autonomy is bounded by cluster class: `auto` is refused for workload (prod-class) clusters before a run exists; allowed on dev-staging and management | test: refused, no run directory |
 
 ## 3. Constraints
 

@@ -43,6 +43,18 @@ Layers pass data, not references to each other's internals. The contracts are JS
 
 Each step says whether it can be undone by re-pointing (`reversible: true`: launch template, ASG instance refresh, addon rollout) or only by restoring a backup (`reversible: false`: in-place control-plane upgrade). An irreversible step **refuses to execute** unless its `backup_precondition` holds (`etcd-snapshot-fresh`: a snapshot exists and is within 1000 raft entries of the live cluster). The mandatory "snapshot first" rule is one instance of this general rule, not a special case: the control-plane component steps are the irreversible ones, and the snapshot step is what satisfies their precondition.
 
+### Gate policy: progressive autonomy, bounded by cluster class
+
+The same step loop runs at three autonomy levels. The only thing that changes is who decides to continue.
+
+| Policy | Before a step | After the postcheck | Plan gate | Allowed on |
+|---|---|---|---|---|
+| `manual` | an operator signs off each step that declares `signoff` (`--approve`, logged per step) | pass: continue; fail: `halted_by_operator` | needs `--approve` | every cluster |
+| `assisted` | no signature | pass: continue; fail: stop, `stopped_postcheck`, a human is woken | passes if the diff `verdict.safe_to_apply` | every cluster |
+| `auto` | no signature | as assisted | as assisted, and **refuses a plan that carries warnings** (nobody will read them) | `dev-staging` and `management` only |
+
+The saving lives in the jump from manual to assisted: the human stops reading every step and is woken only by exceptions. Auto is the same decision with nobody present, so it is confined to clusters where a mistake is cheap: configuring `auto` for a `workload` (prod-class) cluster is **refused before any run directory exists**. `--approve` remains the manual signature and is ignored under assisted and auto. The policy is recorded in the run state, in every step definition and in every evidence record, and is kept across `--resume`.
+
 ### Two orthogonal axes of blast radius
 
 - **Layer** (dependency, serial): `master` -> `worker` -> `components`. A later layer never starts before the earlier is verified.

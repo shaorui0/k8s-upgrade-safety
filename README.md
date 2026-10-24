@@ -26,6 +26,11 @@ python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-north --
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-west  --approve   # PDB blocks the canary drain: nothing forced
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-south --approve   # CCM unhealthy: addon layer stops
 
+# progressive autonomy
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-canary --gate auto        # refused: exit 2, no run created
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster prod-canary --gate assisted    # no signatures; stops only on failure
+python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1       --gate auto        # unattended, dev-staging only
+
 # interrupt, then continue without repeating completed steps
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --approve --run-id demo --interrupt-at workers:batch1
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --approve --resume demo
@@ -34,7 +39,7 @@ python3 -m upgrade_safety run --fleet testenv/fleet.yaml --cluster dev-1 --appro
 python3 -m upgrade_safety run --fleet testenv/fleet.yaml --approve
 ```
 
-Commands: `check`, `plan` (dry-run, no mutation), `apply` (through the addon layer), `verify` (needs `--resume <run>` for the baseline diff), `run` (apply + verify). Exit codes: 0 ok, 1 a gate stopped the run, 2 awaiting approval or usage error, 130 interrupted.
+Commands: `check`, `plan` (dry-run, no mutation), `apply` (through the addon layer), `verify` (needs `--resume <run>` for the baseline diff), `run` (apply + verify). Exit codes: 0 ok, 1 a gate stopped the run, 2 awaiting approval, a refused policy or a usage error, 130 interrupted.
 
 **Scope of the claim.** The simulator shows the gate logic is consistent and its evidence is reproducible. It says nothing about real kubeadm, real etcd or real AWS behaviour. Sources are the two public write-ups of the original system; the numbers (50 clusters, 1.24 -> 1.29, 18-21 h with two people to 6-8 h with one operator, 20% batches, `serial: 1`, raft lag 1000, drain 300 s to 600 s) come from there. The roadmap items in the write-up (alert gating, synthetic checks, auto-promotion after canary) are targets, not results, and are not claimed here.
 
@@ -53,6 +58,7 @@ Each answer traces to a numbered requirement in [`docs/REQUIREMENTS.md`](docs/RE
 | **What is the engine, really?** | A level-triggered reconcile: desired versus observed gives a diff, the diff becomes steps, each step is precheck, one action, postcheck against the baseline, gate, with one evidence record. Drift is a difference, not a surprise. (R16) |
 | **Who is allowed to touch the cluster?** | Only an executor behind a narrow interface (`observe`, `execute`). The engine decides from snapshots and never acts; the simulator is the one implementation, real Terraform or Ansible adapters are named and refuse. (R19) |
 | **Can everything be undone?** | No, and each step says so. An irreversible step (control-plane components) is refused unless a fresh etcd snapshot exists; "snapshot first" is one instance of that rule. (R18) |
+| **How does it go unattended?** | Progressively. Manual: a signature per step. Assisted: continue on a passing postcheck, a human only on failure. Auto: same, nobody present, only on dev-staging and management clusters; asking for it on a prod-class cluster is refused before anything exists. (R21, R22) |
 | **What does "done" mean?** | A version x health quadrant against a baseline file written before the upgrade, cross-checked with an external monitor. Not an engineer's memory. (R8) |
 | **When do you roll back?** | Triggers are declared before execution, per layer: control plane is snapshot restore plus binary downgrade, workers stop the refresh and revert the template, addons roll out undo. (R9) |
 | **What stops the whole fleet?** | Any failure. Order is dev, preprod, prod canary, remaining prod, management last. A human restarts it. (R10) |
